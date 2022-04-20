@@ -1,0 +1,9 @@
+domain: osbuilder.project-flotta.io
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: osbuild-operator
+repo: github.com/project-flotta/osbuild-operator
+version: "3"
