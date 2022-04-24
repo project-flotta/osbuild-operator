@@ -23,19 +23,71 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// User defines a single user to be configured
+type User struct {
+	// Name is the username for the new user
+	Name string `json:"name"`
+	// Groups is the groups to add the user to (optional)
+	Groups []string `json:"groups,omitempty"`
+	// Key is the user's SSH public key (optional)
+	Key *string `json:"key,omitempty"`
+}
+
+// OSTreeConfig defines the OSTree ref details
+type OSTreeConfig struct {
+	// Url is the URL of the target build
+	Url *string `json:"url"`
+	// Ref is the ref of the target build
+	Ref *string `json:"ref"`
+	// Parent is the ref of the parent of target build (Optional)
+	Parent *string `json:"parent"`
+}
+
+// +kubebuilder:validation:Enum=edge-container;edge-installer
+type ImageType string
+
+// BuildDetails includes all the information needed to build the image
+type BuildDetails struct {
+	// Distribution is the name of the O/S distribution
+	Distribution string `json:"distribution"`
+	// Packages is a list of RPM packages to install (optional)
+	Packages []string `json:"packages,omitempty"`
+	// Users is the list of Users to add to the image (optional)
+	Users []User `json:"users,omitempty"`
+	// EnabledServices is the list of services to enabled (optional)
+	EnabledServices []string `json:"enabled_services,omitempty"`
+	// DisabledServices is the list of services to disabled (optional)
+	DisabledServices []string `json:"disabled_services,omitempty"`
+	// Architecture defines target architecture of the image
+	Architecture string `json:"architecture"`
+	// OSTree is the OSTree configuration of the build
+	OSTree *OSTreeConfig `json:"ostree,omitempty"`
+	// ImageType defines the target image type
+	ImageType ImageType `json:"image_type"`
+}
+
+type BuildTriggers struct {
+	// ConfigChange if True trigger a new build upon any change in this BuildConfig CR
+	ConfigChange *bool `json:"config_change,omitempty"`
+}
+
 // OSBuildConfigSpec defines the desired state of OSBuildConfig
 type OSBuildConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of OSBuildConfig. Edit osbuildconfig_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Details defines what to build
+	Details BuildDetails `json:"build_details"`
+	// Triggers defines when to build
+	Triggers BuildTriggers `json:"build_triggers"`
 }
 
 // OSBuildConfigStatus defines the observed state of OSBuildConfig
 type OSBuildConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	LastVersion *int `json:"lastversion,omitempty"`
 }
 
 //+kubebuilder:object:root=true
