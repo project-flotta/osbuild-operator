@@ -1,0 +1,141 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: osbuildconfigs.osbuilder.project-flotta.io
+spec:
+  group: osbuilder.project-flotta.io
+  names:
+    kind: OSBuildConfig
+    listKind: OSBuildConfigList
+    plural: osbuildconfigs
+    singular: osbuildconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OSBuildConfig is the Schema for the osbuildconfigs API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OSBuildConfigSpec defines the desired state of OSBuildConfig
+            properties:
+              build_details:
+                description: Details defines what to build
+                properties:
+                  architecture:
+                    description: Architecture defines target architecture of the image
+                    type: string
+                  disabled_services:
+                    description: DisabledServices is the list of services to disabled
+                      (optional)
+                    items:
+                      type: string
+                    type: array
+                  distribution:
+                    description: Distribution is the name of the O/S distribution
+                    type: string
+                  enabled_services:
+                    description: EnabledServices is the list of services to enabled
+                      (optional)
+                    items:
+                      type: string
+                    type: array
+                  image_type:
+                    description: ImageType defines the target image type
+                    enum:
+                    - edge-container
+                    - edge-installer
+                    type: string
+                  ostree:
+                    description: OSTree is the OSTree configuration of the build
+                    properties:
+                      parent:
+                        description: Parent is the ref of the parent of target build
+                          (Optional)
+                        type: string
+                      ref:
+                        description: Ref is the ref of the target build
+                        type: string
+                      url:
+                        description: Url is the URL of the target build
+                        type: string
+                    required:
+                    - parent
+                    - ref
+                    - url
+                    type: object
+                  packages:
+                    description: Packages is a list of RPM packages to install (optional)
+                    items:
+                      type: string
+                    type: array
+                  users:
+                    description: Users is the list of Users to add to the image (optional)
+                    items:
+                      description: User defines a single user to be configured
+                      properties:
+                        groups:
+                          description: Groups is the groups to add the user to (optional)
+                          items:
+                            type: string
+                          type: array
+                        key:
+                          description: Key is the user's SSH public key (optional)
+                          type: string
+                        name:
+                          description: Name is the username for the new user
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                required:
+                - architecture
+                - distribution
+                - image_type
+                type: object
+              build_triggers:
+                description: Triggers defines when to build
+                properties:
+                  config_change:
+                    description: ConfigChange if True trigger a new build upon any
+                      change in this BuildConfig CR
+                    type: boolean
+                type: object
+            required:
+            - build_details
+            - build_triggers
+            type: object
+          status:
+            description: OSBuildConfigStatus defines the observed state of OSBuildConfig
+            properties:
+              lastversion:
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
