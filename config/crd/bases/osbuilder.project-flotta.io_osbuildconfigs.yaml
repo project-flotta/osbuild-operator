@@ -1,0 +1,191 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: osbuildconfigs.osbuilder.project-flotta.io
+spec:
+  group: osbuilder.project-flotta.io
+  names:
+    kind: OSBuildConfig
+    listKind: OSBuildConfigList
+    plural: osbuildconfigs
+    singular: osbuildconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OSBuildConfig is the Schema for the osbuildconfigs API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OSBuildConfigSpec defines the desired state of OSBuildConfig
+            properties:
+              details:
+                description: Details defines what to build
+                properties:
+                  customizations:
+                    description: Customizations defines the changes to be applied
+                      on top of the base image (optional)
+                    properties:
+                      packages:
+                        description: Packages is a list of RPM packages to install
+                          (optional)
+                        items:
+                          type: string
+                        type: array
+                      services:
+                        description: Services defines the services to enable or disable
+                          (optional)
+                        properties:
+                          disabled:
+                            description: Disabled is the list of services to disabled
+                              (optional)
+                            items:
+                              type: string
+                            type: array
+                          enabled:
+                            description: Enabled is the list of services to enabled
+                              (optional)
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      users:
+                        description: Users is the list of Users to add to the image
+                          (optional)
+                        items:
+                          description: User defines a single user to be configured
+                          properties:
+                            groups:
+                              description: Groups is the groups to add the user to
+                                (optional)
+                              items:
+                                type: string
+                              type: array
+                            name:
+                              description: Name is the username for the new user
+                              type: string
+                            pubKey:
+                              description: Key is the user's SSH public key (optional)
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                    type: object
+                  distribution:
+                    description: Distribution is the name of the O/S distribution
+                    type: string
+                  targetImage:
+                    description: TargetImage defines the requested output image
+                    properties:
+                      architecture:
+                        description: Architecture defines target architecture of the
+                          image
+                        enum:
+                        - x86_64
+                        - aarch64
+                        type: string
+                      osTree:
+                        description: OSTree is the OSTree configuration of the build
+                          (optional)
+                        properties:
+                          parent:
+                            description: Parent is the ref of the parent of target
+                              build (Optional)
+                            type: string
+                          ref:
+                            description: Ref is the ref of the target build (Optional)
+                            type: string
+                          url:
+                            description: URL is the URL of the target build (Optional)
+                            type: string
+                        type: object
+                      targetImageType:
+                        description: ImageType defines the target image type
+                        enum:
+                        - edge-container
+                        - edge-installer
+                        type: string
+                    required:
+                    - architecture
+                    - targetImageType
+                    type: object
+                required:
+                - distribution
+                - targetImage
+                type: object
+              triggers:
+                description: Triggers defines when to build
+                properties:
+                  configChange:
+                    description: ConfigChange if True trigger a new build upon any
+                      change in this BuildConfig CR (optional)
+                    type: boolean
+                  webHook:
+                    description: WebHook defines the way to trigger a build using
+                      a REST call (optional)
+                    properties:
+                      allowEnv:
+                        description: allowEnv determines whether the webhook can set
+                          environment variables; can only be set to true for GenericWebHook.
+                        type: boolean
+                      secret:
+                        description: 'secret used to validate requests. Deprecated:
+                          use SecretReference instead.'
+                        type: string
+                      secretReference:
+                        description: secretReference is a reference to a secret in
+                          the same namespace, containing the value to be validated
+                          when the webhook is invoked. The secret being referenced
+                          must contain a key named "WebHookSecretKey", the value of
+                          which will be checked against the value supplied in the
+                          webhook invocation.
+                        properties:
+                          name:
+                            description: Name is the name of the resource in the same
+                              namespace being referenced
+                            type: string
+                        required:
+                        - name
+                        type: object
+                    type: object
+                type: object
+            required:
+            - details
+            - triggers
+            type: object
+          status:
+            description: OSBuildConfigStatus defines the observed state of OSBuildConfig
+            properties:
+              lastVersion:
+                description: LastVersion denotes the number of the last OSBuild CR
+                  created for thie OSBuildConfig CR
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
