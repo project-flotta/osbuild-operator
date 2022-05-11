@@ -18,6 +18,8 @@ package main
 
 import (
 	"flag"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -84,9 +86,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	OSBuildConfigRepository := osbuildconfig.NewOSBuildConfigRepository(mgr.GetClient())
+	OSBuildRepository := osbuild.NewOSBuildRepository(mgr.GetClient())
+
 	if err = (&controllers.OSBuildConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:                  mgr.GetClient(),
+		Scheme:                  mgr.GetScheme(),
+		OSBuildConfigRepository: OSBuildConfigRepository,
+		OSBuildRepository:       OSBuildRepository,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildConfig")
 		os.Exit(1)
