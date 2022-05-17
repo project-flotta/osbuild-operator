@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -34,7 +35,7 @@ func (r *OSBuildConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 // TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
-//+kubebuilder:webhook:path=/mutate-osbuilder-project-flotta-io-v1alpha1-osbuildconfig,mutating=true,failurePolicy=fail,sideEffects=None,groups=osbuilder.project-flotta.io,resources=osbuildconfigs,verbs=create;update,versions=v1alpha1,name=mosbuildconfig.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-osbuilder-project-flotta-io-v1alpha1-osbuildconfig,mutating=true,failurePolicy=fail,sideEffects=None,groups=osbuilder.project-flotta.io,resources=osbuildconfigs,verbs=update,versions=v1alpha1,name=mosbuildconfig.kb.io,admissionReviewVersions={v1,v1alpha1}
 
 var _ webhook.Defaulter = &OSBuildConfig{}
 
@@ -45,8 +46,8 @@ func (r *OSBuildConfig) Default() {
 	// TODO(user): fill in your defaulting logic.
 }
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-osbuilder-project-flotta-io-v1alpha1-osbuildconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=osbuilder.project-flotta.io,resources=osbuildconfigs,verbs=create;update,versions=v1alpha1,name=vosbuildconfig.kb.io,admissionReviewVersions=v1
+// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable creation and deletion validation.
+//+kubebuilder:webhook:path=/validate-osbuilder-project-flotta-io-v1alpha1-osbuildconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=osbuilder.project-flotta.io,resources=osbuildconfigs,verbs=update,versions=v1alpha1,name=vosbuildconfig.kb.io,admissionReviewVersions={v1,v1alpha1}
 
 var _ webhook.Validator = &OSBuildConfig{}
 
@@ -61,8 +62,39 @@ func (r *OSBuildConfig) ValidateCreate() error {
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *OSBuildConfig) ValidateUpdate(old runtime.Object) error {
 	osbuildconfiglog.Info("validate update", "name", r.Name)
+	oldOSBuildConfig := old.(*OSBuildConfig)
 
-	// TODO(user): fill in your validation logic upon object update.
+	err := fmt.Errorf("cannot update immutable fields")
+
+	if r.Spec.Details.TargetImage.Architecture != oldOSBuildConfig.Spec.Details.TargetImage.Architecture {
+		osbuildconfiglog.Error(err, "Architecture is an immutable field and cannot be updated")
+		return err
+	}
+
+	if r.Spec.Details.Distribution != oldOSBuildConfig.Spec.Details.Distribution {
+		osbuildconfiglog.Error(err, "Distribution is an immutable field and cannot be updated")
+		return err
+	}
+
+	if r.Spec.Details.TargetImage.TargetImageType != oldOSBuildConfig.Spec.Details.TargetImage.TargetImageType {
+		osbuildconfiglog.Error(err, "TargetImageType is an immutable field and cannot be updated")
+		return err
+	}
+
+	if r.Spec.Details.TargetImage.OSTree.URL != oldOSBuildConfig.Spec.Details.TargetImage.OSTree.URL {
+		osbuildconfiglog.Error(err, "OSTree is an immutable field and cannot be updated")
+		return err
+	}
+
+	if r.Spec.Details.TargetImage.OSTree.Ref != oldOSBuildConfig.Spec.Details.TargetImage.OSTree.Ref {
+		osbuildconfiglog.Error(err, "OSTree is an immutable field and cannot be updated")
+		return err
+	}
+
+	if r.Spec.Details.TargetImage.OSTree.Parent != oldOSBuildConfig.Spec.Details.TargetImage.OSTree.Parent {
+		osbuildconfiglog.Error(err, "OSTree is an immutable field and cannot be updated")
+		return err
+	}
 	return nil
 }
 
