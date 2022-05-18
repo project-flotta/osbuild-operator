@@ -1,0 +1,19 @@
+apiVersion: osbuilder.project-flotta.io/v1alpha1
+kind: OSBuildConfig
+metadata:
+  name: osbuildconfig-sample
+spec:
+  details:
+    distribution: fedora-35
+    customizations:
+      packages:
+        - node_exporter
+        - ansible
+    targetImage:
+      architecture: x86_64
+      targetImageType: edge-container
+      osTree:
+        url: "https://hostedimagesserver.flotta.io/"
+        ref: "rhel/8/x86_64/edge"
+  triggers:
+    configChange: true

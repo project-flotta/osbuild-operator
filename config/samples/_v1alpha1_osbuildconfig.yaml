@@ -1,6 +1,0 @@
-apiVersion: osbuilder.project-flotta.io/v1alpha1
-kind: OSBuildConfig
-metadata:
-  name: osbuildconfig-sample
-spec:
-  # TODO(user): Add fields here
