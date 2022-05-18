@@ -25,18 +25,44 @@ import (
 
 // OSBuildSpec defines the desired state of OSBuild
 type OSBuildSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Details defines what to build
+	Details BuildDetails `json:"details"`
 
-	// Foo is an example field of OSBuild. Edit osbuild_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// TriggeredBy explains what triggered the build out
+	TriggeredBy TriggeredBy `json:"triggeredBy"`
 }
+
+// +kubebuilder:validation:Enum=UpdateCR;Webhook
+type TriggeredBy string
 
 // OSBuildStatus defines the observed state of OSBuild
 type OSBuildStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// The conditions present the latest available observations of a build's current state
+	Conditions []OSBuildCondition `json:"conditions,omitempty"`
+
+	// +optional
+	Output *string `json:"output,omitempty"`
 }
+
+type OSBuildCondition struct {
+	// Type of status
+	// +kubebuilder:validation:Enum=started;failed;pending;finished
+	// +kubebuilder:default=pending
+	Type OSBuildConditionType `json:"type" description:"type of OSBuildCondition condition"`
+
+	// Status of the condition, one of True, False, Unknown
+	Status metav1.ConditionStatus `json:"status" description:"status of the condition, one of True, False, Unknown"`
+
+	// A human-readable message indicating details about last transition
+	// +kubebuilder:optional
+	Message *string `json:"message,omitempty" description:"one-word CamelCase reason for the condition's last transition"`
+
+	// The last time the condition transit from one status to another
+	// +optional
+	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty" description:"last time the condition transit from one status to another"`
+}
+
+type OSBuildConditionType string
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
