@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/runtime"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -81,20 +82,11 @@ func (r *OSBuildConfig) ValidateUpdate(old runtime.Object) error {
 		return err
 	}
 
-	if r.Spec.Details.TargetImage.OSTree.URL != oldOSBuildConfig.Spec.Details.TargetImage.OSTree.URL {
+	if !reflect.DeepEqual(r.Spec.Details.TargetImage.OSTree, oldOSBuildConfig.Spec.Details.TargetImage.OSTree) {
 		osbuildconfiglog.Error(err, "OSTree is an immutable field and cannot be updated")
 		return err
 	}
 
-	if r.Spec.Details.TargetImage.OSTree.Ref != oldOSBuildConfig.Spec.Details.TargetImage.OSTree.Ref {
-		osbuildconfiglog.Error(err, "OSTree is an immutable field and cannot be updated")
-		return err
-	}
-
-	if r.Spec.Details.TargetImage.OSTree.Parent != oldOSBuildConfig.Spec.Details.TargetImage.OSTree.Parent {
-		osbuildconfiglog.Error(err, "OSTree is an immutable field and cannot be updated")
-		return err
-	}
 	return nil
 }
 
