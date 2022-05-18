@@ -31,3 +31,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
+  - osbuilds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
+  - osbuilds/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
+  - osbuilds/status
+  verbs:
+  - get
+  - patch
+  - update
