@@ -1,0 +1,24 @@
+# permissions for end users to edit osbuilds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: osbuild-editor-role
+rules:
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
+  - osbuilds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
+  - osbuilds/status
+  verbs:
+  - get
