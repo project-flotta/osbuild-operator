@@ -41,6 +41,12 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+var Config struct {
+	// If Webhooks are enabled, an admission webhook is created and checked when
+	// any user submits any change to any "osbuilder.project-flotta.io" CRD.
+	EnableWebhooks bool `envconfig:"ENABLE_WEBHOOKS" default:"true"`
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
@@ -85,10 +91,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildConfig")
 		os.Exit(1)
 	}
-	if err = (&osbuilderprojectflottaiov1alpha1.OSBuildConfig{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OSBuildConfig")
-		os.Exit(1)
+
+	// webhooks
+	if Config.EnableWebhooks {
+		if err = (&osbuilderprojectflottaiov1alpha1.OSBuildConfig{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OSBuildConfig")
+			os.Exit(1)
+		}
 	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
