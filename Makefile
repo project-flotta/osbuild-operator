@@ -64,6 +64,28 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# Docker command to use, can be podman
+ifneq (, $(shell which podman))
+CONTAINER_RUNTIME := podman
+else
+ifneq (, $(shell which docker))
+CONTAINER_RUNTIME := docker
+else
+$(error "Neither docker nor podman are available in PATH")
+endif
+endif
+
+# Kubectl command to use, can be oc
+ifneq (, $(shell which kubectl))
+CLUSTER_RUNTIME := kubectl
+else
+ifneq (, $(shell which oc))
+CLUSTER_RUNTIME := oc
+else
+$(error "Neither kubectl nor oc are available in PATH")
+endif
+endif
+
 .PHONY: all
 all: build
 
@@ -90,6 +112,16 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
+.PHONY: generate-tools
+generate-tools:
+ifeq (, $(shell which mockery))
+	(cd /tmp && go install github.com/vektra/mockery/...@v1.1.2)
+endif
+ifeq (, $(shell which mockgen))
+	(cd /tmp/ && go install github.com/golang/mock/mockgen@v1.6.0)
+endif
+	@exit
+
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -102,15 +134,40 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: gosec
+gosec: ## Run gosec locally
+	$(CONTAINER_RUNTIME) run --rm -v $(PWD):/opt/data/:z docker.io/securego/gosec -exclude-generated /opt/data/...
+
+GO_IMAGE=golang:1.17.8-alpine3.14
+GOIMPORTS_IMAGE=golang.org/x/tools/cmd/goimports@latest
+FILES_LIST=$(shell ls -d */ | grep -v -E "vendor|tools|test|client|restapi|models|generated")
+MODULE_NAME=$(shell head -n 1 go.mod | cut -d '/' -f 3)
+.PHONY: imports
+imports: ## fix and format go imports
+	@# Removes blank lines within import block so that goimports does its magic in a deterministic way
+	find $(FILES_LIST) -type f -name "*.go" | xargs -L 1 sed -i '/import (/,/)/{/import (/n;/)/!{/^$$/d}}'
+	$(CONTAINER_RUNTIME) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(GO_IMAGE) \
+		sh -c 'go install $(GOIMPORTS_IMAGE) && goimports -w -local github.com/project-flotta $(FILES_LIST) && goimports -w -local github.com/project-flotta/$(MODULE_NAME) $(FILES_LIST)'
+
+LINT_IMAGE=golangci/golangci-lint:v1.45.0
+.PHONY: lint
+lint: ## Check if the go code is properly written, rules are in .golangci.yml
+	$(CONTAINER_RUNTIME) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(LINT_IMAGE) sh -c 'golangci-lint run'
+
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
+
+.PHONY: vendor
+vendor:
+	go mod tidy -go=1.17
+	go mod vendor
 
 ##@ Build
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -o -mod=vendor bin/manager main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -118,11 +175,11 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${IMG} .
+	$(CONTAINER_RUNTIME) build -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
+	$(CONTAINER_RUNTIME) push ${IMG}
 
 ##@ Deployment
 
@@ -132,20 +189,20 @@ endif
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+	$(KUSTOMIZE) build config/crd | $(CLUSTER_RUNTIME) apply -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUSTOMIZE) build config/crd | $(CLUSTER_RUNTIME) delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	$(KUSTOMIZE) build config/default | $(CLUSTER_RUNTIME) apply -f -
 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUSTOMIZE) build config/default | $(CLUSTER_RUNTIME) delete --ignore-not-found=$(ignore-not-found) -f -
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 .PHONY: controller-gen
@@ -185,7 +242,7 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(CONTAINER_RUNTIME) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
