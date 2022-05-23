@@ -3,4 +3,16 @@ kind: OSBuild
 metadata:
   name: osbuild-sample
 spec:
-  # TODO(user): Add fields here
+  details:
+    distribution: fedora-35
+    customizations:
+      packages:
+        - node_exporter
+        - ansible
+    targetImage:
+      architecture: x86_64
+      targetImageType: edge-container
+      osTree:
+        url: "https://hostedimagesserver.flotta.io/"
+        ref: "rhel/8/x86_64/edge"
+  triggeredBy: "UpdateCR"
