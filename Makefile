@@ -167,7 +167,7 @@ vendor:
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	go build -o -mod=vendor bin/manager main.go
+	go build -mod=vendor -o bin/manager main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
