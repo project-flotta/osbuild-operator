@@ -189,6 +189,7 @@ build-iso: ## build fake iso
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
 	go build -mod=vendor -o bin/manager main.go
+	go build -mod=vendor -o bin/httpapi ./cmd/httpapi/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -224,6 +225,7 @@ install-cert-manager: cmctl
 .PHONY: deploy
 deploy: manifests kustomize install-cert-manager ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/httpapi && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(CLUSTER_RUNTIME) apply -f -
 
 .PHONY: undeploy

@@ -4,7 +4,7 @@ metadata:
   name: osbuildconfig-sample
 spec:
   details:
-    distribution: fedora-35
+    distribution: rhel-86
     customizations:
       packages:
         - node_exporter
@@ -22,3 +22,8 @@ spec:
         value: bar
   triggers:
     configChange: true
+    webHook:
+      secretReference:
+        # Run separately `oc create secret generic mysecret --from-literal=WebHookSecretKey=secretvalue1 -n osbuild`
+        name: mysecret
+      allowEnv: true

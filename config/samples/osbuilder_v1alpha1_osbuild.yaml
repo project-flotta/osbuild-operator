@@ -4,7 +4,7 @@ metadata:
   name: osbuild-sample
 spec:
   details:
-    distribution: fedora-35
+    distribution: rhel-86
     customizations:
       packages:
         - node_exporter

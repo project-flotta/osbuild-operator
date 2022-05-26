@@ -18,40 +18,24 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	osbuilderv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
-	"github.com/project-flotta/osbuild-operator/internal/customizations"
+	"github.com/project-flotta/osbuild-operator/internal/manifests"
 	"github.com/project-flotta/osbuild-operator/internal/predicates"
-	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfigtemplate"
-	"github.com/project-flotta/osbuild-operator/internal/templates"
 )
-
-var zero int
 
 // OSBuildConfigReconciler reconciles a OSBuildConfig object
 type OSBuildConfigReconciler struct {
 	client.Client
-	Scheme                          *runtime.Scheme
-	OSBuildConfigRepository         osbuildconfig.Repository
-	OSBuildRepository               osbuild.Repository
-	OSBuildConfigTemplateRepository osbuildconfigtemplate.Repository
-	ConfigMapRepository             configmap.Repository
+	OSBuildConfigRepository osbuildconfig.Repository
+	OSBuildCRCreator        manifests.OSBuildCRCreator
 }
 
 //+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -86,7 +70,7 @@ func (r *OSBuildConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	err = r.createNewOSBuildCR(ctx, osBuildConfig, logger)
+	err = r.OSBuildCRCreator.Create(ctx, osBuildConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
@@ -95,168 +79,6 @@ func (r *OSBuildConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuildConfig *osbuilderv1alpha1.OSBuildConfig, logger logr.Logger) error {
-	lastVersion := osBuildConfig.Status.LastVersion
-	if lastVersion == nil {
-		lastVersion = &zero
-	}
-	osBuildNewVersion := *lastVersion + 1
-
-	osBuildName := fmt.Sprintf("%s-%d", osBuildConfig.Name, osBuildNewVersion)
-	osBuild := &osbuilderv1alpha1.OSBuild{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      osBuildName,
-			Namespace: osBuildConfig.Namespace,
-		},
-		Spec: osbuilderv1alpha1.OSBuildSpec{
-			TriggeredBy: "UpdateCR",
-		},
-	}
-
-	osBuildConfigSpecDetails := osBuildConfig.Spec.Details.DeepCopy()
-	kickstartConfigMap, osConfigTemplate, err := r.applyTemplate(ctx, osBuildConfig, osBuildConfigSpecDetails, osBuildName, osBuild)
-	if err != nil {
-		logger.Error(err, "cannot apply template to osBuild")
-		return err
-	}
-	osBuild.Spec.Details = *osBuildConfigSpecDetails
-
-	// Set the owner of the osBuild CR to be osBuildConfig in order to manage lifecycle of the osBuild CR.
-	// Especially in deletion of osBuildConfig CR
-	err = controllerutil.SetControllerReference(osBuildConfig, osBuild, r.Scheme)
-	if err != nil {
-		logger.Error(err, "cannot create osBuild")
-		return err
-	}
-
-	patch := client.MergeFrom(osBuildConfig.DeepCopy())
-	osBuildConfig.Status.LastVersion = &osBuildNewVersion
-	if osConfigTemplate != nil {
-		osBuildConfig.Status.CurrentTemplateResourceVersion = &osConfigTemplate.ResourceVersion
-		osBuildConfig.Status.LastTemplateResourceVersion = &osConfigTemplate.ResourceVersion
-	}
-	err = r.OSBuildConfigRepository.PatchStatus(ctx, osBuildConfig, &patch)
-	if err != nil {
-		logger.Error(err, "cannot update the field lastVersion of osBuildConfig")
-		return err
-	}
-
-	err = r.OSBuildRepository.Create(ctx, osBuild)
-	if err != nil {
-		logger.Error(err, "cannot create osBuild")
-		return err
-	}
-
-	if kickstartConfigMap != nil {
-		err = r.setKickstartConfigMapOwner(ctx, kickstartConfigMap, osBuild)
-		if err != nil {
-			logger.Error(err, "cannot set controller reference to kickstart config map")
-			return err
-		}
-	}
-
-	logger.Info("A new OSBuild CR was created", "OSBuild", osBuild.Name)
-
-	return nil
-}
-
-func (r *OSBuildConfigReconciler) applyTemplate(ctx context.Context, osBuildConfig *osbuilderv1alpha1.OSBuildConfig, osBuildConfigSpecDetails *osbuilderv1alpha1.BuildDetails, osBuildName string, osBuild *osbuilderv1alpha1.OSBuild) (*corev1.ConfigMap, *osbuilderv1alpha1.OSBuildConfigTemplate, error) {
-	var kickstartConfigMap *corev1.ConfigMap
-	var osConfigTemplate *osbuilderv1alpha1.OSBuildConfigTemplate
-	if template := osBuildConfig.Spec.Template; template != nil {
-		var err error
-		osConfigTemplate, err = r.OSBuildConfigTemplateRepository.Read(ctx, template.OSBuildConfigTemplateRef, osBuildConfig.Namespace)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		osBuildConfigSpecDetails.Customizations = customizations.MergeCustomizations(osConfigTemplate.Spec.Customizations, osBuildConfigSpecDetails.Customizations)
-
-		kickstartConfigMap, err = r.createKickstartConfigMap(ctx, osBuildConfig, osConfigTemplate, osBuildName, osBuild.Namespace)
-		if err != nil {
-			return nil, nil, err
-		}
-		if kickstartConfigMap != nil {
-			osBuild.Spec.Kickstart = &osbuilderv1alpha1.NameRef{Name: osBuildName}
-		}
-	}
-	return kickstartConfigMap, osConfigTemplate, nil
-}
-
-func (r *OSBuildConfigReconciler) setKickstartConfigMapOwner(ctx context.Context, kickstartConfigMap *corev1.ConfigMap, osBuild *osbuilderv1alpha1.OSBuild) error {
-	oldConfigMap := kickstartConfigMap.DeepCopy()
-	err := controllerutil.SetOwnerReference(osBuild, kickstartConfigMap, r.Scheme)
-	if err != nil {
-		return err
-	}
-	return r.ConfigMapRepository.Patch(ctx, oldConfigMap, kickstartConfigMap)
-}
-
-func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, osBuildConfig *osbuilderv1alpha1.OSBuildConfig, osConfigTemplate *osbuilderv1alpha1.OSBuildConfigTemplate, name, namespace string) (*corev1.ConfigMap, error) {
-	kickstart, err := r.getKickstart(ctx, osConfigTemplate, osBuildConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	if kickstart == nil {
-		return nil, nil
-	}
-
-	cm, err := r.ConfigMapRepository.Read(ctx, name, namespace)
-	if err == nil {
-		// CM has already been created, returning it
-		return cm, nil
-	}
-	if !errors.IsNotFound(err) {
-		return nil, err
-	}
-
-	cm = &corev1.ConfigMap{
-		ObjectMeta: ctrl.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Data: map[string]string{
-			"kickstart": *kickstart,
-		},
-	}
-
-	err = r.ConfigMapRepository.Create(ctx, cm)
-	if err != nil {
-		return nil, err
-	}
-	return cm, nil
-}
-
-func (r *OSBuildConfigReconciler) getKickstart(ctx context.Context, osConfigTemplate *osbuilderv1alpha1.OSBuildConfigTemplate, osBuildConfig *osbuilderv1alpha1.OSBuildConfig) (*string, error) {
-	if osConfigTemplate.Spec.Iso == nil || osConfigTemplate.Spec.Iso.Kickstart == nil {
-		return nil, nil
-	}
-	if osConfigTemplate.Spec.Iso.Kickstart.Raw == nil && osConfigTemplate.Spec.Iso.Kickstart.ConfigMapName == nil {
-		return nil, nil
-	}
-
-	var kickstartTemplate string
-	if osConfigTemplate.Spec.Iso.Kickstart.Raw != nil {
-		kickstartTemplate = *osConfigTemplate.Spec.Iso.Kickstart.Raw
-	} else {
-		cm, err := r.ConfigMapRepository.Read(ctx, *osConfigTemplate.Spec.Iso.Kickstart.ConfigMapName, osBuildConfig.Namespace)
-		if err != nil {
-			return nil, err
-		}
-		var ok bool
-		if kickstartTemplate, ok = cm.Data["kickstart"]; !ok {
-			return nil, errors.NewNotFound(schema.GroupResource{Group: "configmap", Resource: "key"}, "kickstart")
-		}
-	}
-
-	finalKickstart, err := templates.ProcessOSBuildConfigTemplate(kickstartTemplate, osConfigTemplate.Spec.Parameters, osBuildConfig.Spec.Template.Parameters)
-	if err != nil {
-		return nil, err
-	}
-	return &finalKickstart, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
