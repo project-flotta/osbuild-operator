@@ -158,6 +158,15 @@ lint: ## Check if the go code is properly written, rules are in .golangci.yml
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
+test-create-coverage:
+	sed -i '/mock_/d' cover.out
+	sed -i '/zz_generated/d' cover.out
+	go tool cover -func cover.out
+	go tool cover --html=cover.out -o coverage.html
+
+test-coverage:
+	go tool cover --html=cover.out
+
 .PHONY: vendor
 vendor:
 	go mod tidy -go=1.17

@@ -1,5 +1,5 @@
 ---
-name: Go
+name: CI
 on:  # yamllint disable-line rule:truthy
   push:
     branches: [main]
@@ -39,7 +39,7 @@ jobs:
 
     - name: Checking generated files are up to date
       run: |
-        git diff --quiet config/ internal/ client/ restapi/ generated/ || (echo "There are not committed changes"; git diff config/ internal/ client/ restapi/ generated/ | tee; exit 1)
+        git diff --quiet api/ config/ controllers/  || (echo "There are not committed changes"; git diff api/ config/ controllers/ | tee; exit 1)
 
   Coverage:
     needs: build
