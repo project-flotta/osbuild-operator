@@ -1,0 +1,80 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: httpapi-role
+rules:
+  - apiGroups:
+    - osbuilder.project-flotta.io
+    resources:
+      - osbuildconfigs
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - patch
+      - update
+      - create
+  - apiGroups:
+    - osbuilder.project-flotta.io
+    resources:
+      - osbuildconfigs/status
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+    - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - osbuilder.project-flotta.io
+    resources:
+      - osbuilds
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - osbuilder.project-flotta.io
+    resources:
+      - osbuildconfigs/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - osbuilder.project-flotta.io
+    resources:
+      - osbuildconfigtemplates
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - osbuilder.project-flotta.io
+    resources:
+      - osbuildconfigtemplates/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - osbuilder.project-flotta.io
+    resources:
+      - osbuildconfigtemplates/status
+    verbs:
+      - get
+      - patch
+      - update

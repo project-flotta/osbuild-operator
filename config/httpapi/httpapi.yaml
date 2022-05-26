@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-httpapi
+  namespace: system
+  labels:
+    app: httpapi
+spec:
+  selector:
+    matchLabels:
+      app: httpapi
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: httpapi
+      labels:
+        app: httpapi
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - command:
+            - /httpapi
+          image: controller:latest
+          name: httpapi
+          ports:
+            - containerPort: 8080
+              name: httpapi
+          securityContext:
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          # TODO(user): Configure the resources accordingly based on the project requirements.
+          # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+      serviceAccountName: controller-httpapi
+      terminationGracePeriodSeconds: 10
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: httpapi
+  namespace: system
+  labels:
+    app: httpapi
+spec:
+  ports:
+    - name: httpapi
+      protocol: TCP
+      port: 8080
+      targetPort: httpapi
+  selector:
+    app: httpapi
+  type: ClusterIP
