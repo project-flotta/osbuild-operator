@@ -158,7 +158,8 @@ lint: ## Check if the go code is properly written, rules are in .golangci.yml
 	$(CONTAINER_RUNTIME) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(LINT_IMAGE) sh -c 'golangci-lint run'
 
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+test: ## Run tests.
+test: manifests generate fmt vet envtest get-iso## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 test-create-coverage:
@@ -310,3 +311,8 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+get-iso:
+ifeq (,$(wildcard ./testdata/Fedora.iso))
+	curl -L https://download.fedoraproject.org/pub/fedora/linux/releases/36/Server/x86_64/iso/Fedora-Server-netinst-x86_64-36-1.5.iso -o testdata/Fedora.iso
+endif
