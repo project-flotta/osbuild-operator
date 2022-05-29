@@ -2,4 +2,5 @@
 resources:
 - osbuilder_v1alpha1_osbuildconfig.yaml
 - osbuilder_v1alpha1_osbuild.yaml
+- _v1alpha1_osbuildenvconfig.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

@@ -1,0 +1,24 @@
+apiVersion: osbuilder.project-flotta.io/v1alpha1
+kind: OSBuildEnvConfig
+metadata:
+  name: osbuildenvconfig-sample
+spec:
+  composer:
+    psql:
+      connectionSecretReference:
+        name: composer-db
+      sslMode: disable
+  workers:
+  - vmWorkerConfig:
+      architecture: x86_64
+      imageURL: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.5-x86_64-kvm.qcow2"
+  redHatCredsSecretReference:
+    name: redhat-portal-credentials
+  s3Service:
+    genericS3ServiceConfig:
+      credsSecretReference:
+        name: osbuild-s3-credentials
+      region: us-east-1
+      bucket: osbuild-images
+      endpoint: "http://minio:9000"
+

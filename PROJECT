@@ -35,4 +35,12 @@ resources:
   kind: OSBuildConfigTemplate
   path: github.com/project-flotta/osbuild-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: false
+  controller: true
+  domain: osbuilder.project-flotta.io
+  kind: OSBuildEnvConfig
+  path: github.com/project-flotta/osbuild-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"
