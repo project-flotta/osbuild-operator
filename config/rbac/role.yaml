@@ -34,6 +34,32 @@ rules:
 - apiGroups:
   - osbuilder.project-flotta.io
   resources:
+  - osbuildenvconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
+  - osbuildenvconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
+  - osbuildenvconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - osbuilder.project-flotta.io
+  resources:
   - osbuilds
   verbs:
   - create

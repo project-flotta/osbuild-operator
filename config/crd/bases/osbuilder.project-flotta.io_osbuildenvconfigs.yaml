@@ -1,0 +1,244 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: osbuildenvconfigs.osbuilder.project-flotta.io
+spec:
+  group: osbuilder.project-flotta.io
+  names:
+    kind: OSBuildEnvConfig
+    listKind: OSBuildEnvConfigList
+    plural: osbuildenvconfigs
+    singular: osbuildenvconfig
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OSBuildEnvConfig is the Schema for the osbuildenvconfigs API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OSBuildEnvConfigSpec defines the desired state of OSBuildEnvConfig
+            properties:
+              composer:
+                description: Composer contains all the required configuration values
+                  for the Composer service
+                properties:
+                  psql:
+                    description: PSQL is the configuration of the DB server (optional)
+                    properties:
+                      connectionSecretReference:
+                        description: 'RedHatCredsSecretReference is a reference to
+                          a secret in the same namespace, containing the connection
+                          details to the PSQL service The expected keys are: host,
+                          port, dbname, user, password'
+                        properties:
+                          name:
+                            description: Name is the name of the resource in the same
+                              namespace being referenced
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      sslMode:
+                        description: 'SSLMode is the SSL mode to use when connecting
+                          to the PSQL server As defined here: https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-SSLMODE
+                          (optional - default is prefer)'
+                        enum:
+                        - disable
+                        - allow
+                        - prefer
+                        - require
+                        - verify-ca
+                        - verify-full
+                        type: string
+                    required:
+                    - connectionSecretReference
+                    type: object
+                type: object
+              redHatCredsSecretReference:
+                description: RedHatCredsSecretReference is a reference to a secret
+                  in the same namespace, containing the RedHat Portal credentials
+                  to be used by the Worker machines The expected keys are username
+                  and password
+                properties:
+                  name:
+                    description: Name is the name of the resource in the same namespace
+                      being referenced
+                    type: string
+                required:
+                - name
+                type: object
+              s3Service:
+                description: S3Service holds the configuration needed to connect to
+                  the S3 service
+                properties:
+                  awsS3ServiceConfig:
+                    description: AWSS3ServiceConfig hold the configuration needed
+                      to connect to AWS S3
+                    properties:
+                      bucket:
+                        description: Bucket is the bucket to store images in
+                        type: string
+                      credsSecretReference:
+                        description: CredsSecretReference is a reference to a secret
+                          in the same namespace, containing the connection credentials
+                          for the S3 service The required keys are access-key-id and
+                          secret-access-key
+                        properties:
+                          name:
+                            description: Name is the name of the resource in the same
+                              namespace being referenced
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      region:
+                        description: Region is the region to use when connecting to
+                          the S3 service
+                        type: string
+                    required:
+                    - bucket
+                    - credsSecretReference
+                    - region
+                    type: object
+                  genericS3ServiceConfig:
+                    description: GenericS3ServiceConfig hold the configuration needed
+                      to connect to a generic S3 service
+                    properties:
+                      bucket:
+                        description: Bucket is the bucket to store images in
+                        type: string
+                      caBundleSecretReference:
+                        description: CABundleSecretReference is a reference to a secret
+                          in the same namespace, containing the CA certificate to
+                          use when connecting to the S3 service (optional, default
+                          empty)
+                        properties:
+                          name:
+                            description: Name is the name of the resource in the same
+                              namespace being referenced
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      credsSecretReference:
+                        description: CredsSecretReference is a reference to a secret
+                          in the same namespace, containing the connection credentials
+                          for the S3 service The required keys are access-key-id and
+                          secret-access-key
+                        properties:
+                          name:
+                            description: Name is the name of the resource in the same
+                              namespace being referenced
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      endpoint:
+                        description: Endpoint is the URL of the S3 service
+                        type: string
+                      region:
+                        description: Region is the region to use when connecting to
+                          the S3 service
+                        type: string
+                      skipSSLVerification:
+                        description: SkipSSLVerification when set to true the SSL
+                          certificate will not be verified (optional, default False)
+                        type: boolean
+                    required:
+                    - bucket
+                    - credsSecretReference
+                    - endpoint
+                    - region
+                    type: object
+                type: object
+              workers:
+                description: Workers is a list of WorkerConfig each providing the
+                  configuration required for a worker
+                items:
+                  properties:
+                    externalWorkerConfig:
+                      description: ExternalWorkerConfig hold the configuration needed
+                        to configure an existing machine to act as a Worker
+                      properties:
+                        address:
+                          description: Address is the hostname or IP address of the
+                            external worker machine
+                          type: string
+                        redHatCredsSecretReference:
+                          description: RedHatCredsSecretReference is a reference to
+                            a secret in the same namespace, containing the private
+                            key that may be used to connect to the external worker
+                            machine the expected key is ssh-privatekey
+                          properties:
+                            name:
+                              description: Name is the name of the resource in the
+                                same namespace being referenced
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        user:
+                          description: User is the user to connect with to external
+                            worker machine
+                          type: string
+                      required:
+                      - address
+                      - redHatCredsSecretReference
+                      - user
+                      type: object
+                    vmWorkerConfig:
+                      description: VMWorkerConfig hold the configuration needed to
+                        start a managed VM to act as a Worker
+                      properties:
+                        architecture:
+                          description: Architecture defines the architecture of the
+                            worker machine
+                          enum:
+                          - x86_64
+                          - aarch64
+                          type: string
+                        imageURL:
+                          description: ImageURL is the location of the rhel qcow2
+                            file to run on the worker
+                          type: string
+                      required:
+                      - imageURL
+                      type: object
+                  type: object
+                type: array
+            required:
+            - redHatCredsSecretReference
+            - s3Service
+            - workers
+            type: object
+          status:
+            description: OSBuildEnvConfigStatus defines the observed state of OSBuildEnvConfig
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
