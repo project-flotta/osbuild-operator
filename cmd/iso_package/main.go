@@ -62,12 +62,12 @@ func main() {
 			log.Fatalf("Arch value '%s' is not allowed. Allowed arches are: %v", arch, allowedArchs)
 		}
 
-		cfg := Config{
+		build := Builder{
 			Source:    c.String("source"),
 			Kickstart: c.String("kickstart"),
 			Arch:      arch,
 		}
-		_, err := cfg.Run()
+		_, err := build.Run()
 		return err
 	}
 
