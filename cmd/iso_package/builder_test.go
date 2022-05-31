@@ -19,7 +19,7 @@ import (
 
 var _ = Describe("Config", Ordered, func() {
 	var (
-		config *iso_package.Config
+		config *iso_package.Builder
 		server *http.Server
 		port   int
 	)
@@ -33,8 +33,8 @@ var _ = Describe("Config", Ordered, func() {
 	})
 
 	BeforeEach(func() {
-		config = &iso_package.Config{
-			Source:    fmt.Sprintf("http://127.0.0.1:%d/Fedora.iso", port),
+		config = &iso_package.Builder{
+			Source:    fmt.Sprintf("http://127.0.0.1:%d/fake_iso.iso", port),
 			Kickstart: "../../testdata/test.ks",
 			Arch:      "x86",
 		}

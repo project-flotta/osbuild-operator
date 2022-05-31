@@ -17,7 +17,7 @@ const (
 	tmpFolderPrefix = "iso_package_tmp"
 )
 
-type Config struct {
+type Builder struct {
 	Source    string
 	Kickstart string
 	Arch      string
@@ -28,12 +28,12 @@ type Config struct {
 }
 
 // CleanAll remove all files from the temporal folder
-func (c *Config) CleanAll() {
+func (c *Builder) CleanAll() {
 	os.RemoveAll(c.tmpFolder)
 }
 
 // Run add the given Kickstart file to  given iso
-func (c *Config) Run() (string, error) {
+func (c *Builder) Run() (string, error) {
 	err := c.CheckConfig()
 	if err != nil {
 		return "", err
@@ -69,7 +69,7 @@ func (c *Config) Run() (string, error) {
 }
 
 // CheckConfig validates that current config struct is valid
-func (c *Config) CheckConfig() error {
+func (c *Builder) CheckConfig() error {
 
 	if c.Source == "" {
 		return errors.New("Source file cannot be nil")
@@ -89,7 +89,7 @@ func (c *Config) CheckConfig() error {
 }
 
 // Mount the iso in the source_iso folder
-func (c *Config) MountIso() error {
+func (c *Builder) MountIso() error {
 	cmd := execCommand("blkid -s LABEL -o value %s", c.getIsoFilepath())
 	if cmd.Failed() {
 		return fmt.Errorf("cannot get iso label: %v", cmd.GetErrorMessage())
@@ -127,7 +127,7 @@ func (c *Config) MountIso() error {
 
 // UpdateFiles copy the Kickstart file and update all isolinux and grub to
 // parse it.
-func (c *Config) UpdateFiles() error {
+func (c *Builder) UpdateFiles() error {
 	err := File(c.Kickstart, filepath.Join(c.dstFolderPath, "init.ks"))
 	if err != nil {
 		return fmt.Errorf("cannot copy kickstart file, %v", err)
@@ -155,7 +155,7 @@ func (c *Config) UpdateFiles() error {
 	return err
 }
 
-func (c *Config) CreateFinalIso() (string, error) {
+func (c *Builder) CreateFinalIso() (string, error) {
 	finalPath := filepath.Join(c.tmpFolder, "final.iso")
 	switch c.Arch {
 	case x86ArchValue:
@@ -169,7 +169,7 @@ func (c *Config) CreateFinalIso() (string, error) {
 	}
 }
 
-func (c *Config) XorrisogenIso(output string, label string) error {
+func (c *Builder) XorrisogenIso(output string, label string) error {
 	command := `xorriso \
     -as mkisofs \
     -V %s \
@@ -186,7 +186,7 @@ func (c *Config) XorrisogenIso(output string, label string) error {
 	return nil
 }
 
-func (c *Config) genIso(output string, label string) error {
+func (c *Builder) genIso(output string, label string) error {
 	command := `cd %[1]s && \
     genisoimage -U -r -v -T -J \
       -joliet-long \
@@ -210,13 +210,13 @@ func (c *Config) genIso(output string, label string) error {
 }
 
 // Return the path for the original iso.
-func (c *Config) getIsoFilepath() string {
+func (c *Builder) getIsoFilepath() string {
 	return filepath.Join(c.tmpFolder, "original.iso")
 }
 
 // GetIso donwloads the image from the given url and store it on
 // c.getIsoFilepath()
-func (c *Config) GetIso() error {
+func (c *Builder) GetIso() error {
 	out, err := os.Create(c.getIsoFilepath())
 	if err != nil {
 		return fmt.Errorf("cannot create temporal original iso file: %v", err)
