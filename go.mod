@@ -15,6 +15,11 @@ require (
 )
 
 require (
+	github.com/aws/aws-sdk-go v1.44.25
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+)
+
+require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.18 // indirect
