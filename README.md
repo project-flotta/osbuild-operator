@@ -31,12 +31,16 @@ This repo has the operator which provides a K8S API for building [OSBuild](https
   osbuild-operator-controller-manager-54f9fdbff-85hfj   2/2     Running   0          2m47s
   ```
 
+#### Certificate Manager Operator
+
+Please note that the provisioning of the OSBuild Operator will also provision the [cert-manager](https://cert-manager.io/) Operator as it is a prerequisite for Admission Webhooks
+
 ### Run
 
 - Apply the project's CRDs on the cluster:
-  
+
   `make install`
 
 - Run the operator locally (outside the cluster):
-  
+
   `make run`
