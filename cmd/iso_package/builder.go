@@ -25,6 +25,7 @@ type Builder struct {
 	tmpFolder      string
 	isoSourceLabel string
 	dstFolderPath  string
+	finalIsoPath   string
 }
 
 // CleanAll remove all files from the temporal folder
@@ -66,6 +67,22 @@ func (c *Builder) Run() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+func (c *Builder) Upload(creds *S3Config, targetOutput string) error {
+	sess, err := creds.GetAwsSession()
+	if err != nil {
+		return fmt.Errorf("cannot get aws session: %v", err)
+	}
+	if c.finalIsoPath == "" {
+		return errors.New("Final iso cannot be found")
+	}
+
+	err = creds.UploadFile(sess, targetOutput, c.finalIsoPath)
+	if err != nil {
+		return fmt.Errorf("cannot upload filename to S3: %v", err)
+	}
+	return err
 }
 
 // CheckConfig validates that current config struct is valid
@@ -160,9 +177,11 @@ func (c *Builder) CreateFinalIso() (string, error) {
 	switch c.Arch {
 	case x86ArchValue:
 		err := c.genIso(finalPath, c.isoSourceLabel)
+		c.finalIsoPath = finalPath
 		return finalPath, err
 	case armArchValue:
 		err := c.XorrisogenIso(finalPath, c.isoSourceLabel)
+		c.finalIsoPath = finalPath
 		return finalPath, err
 	default:
 		return "", fmt.Errorf("Not valid arch to build the image: %s", c.Arch)

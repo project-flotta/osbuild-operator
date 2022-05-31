@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -10,6 +11,12 @@ import (
 const (
 	armArchValue = "aarch"
 	x86ArchValue = "x86"
+
+	awsAccessKeyId     = "aws-access-key-id"
+	awsSecretAccessKey = "aws-secret-access-key" //nolint:gosec
+	awsDefaultRegion   = "aws-default-region"
+	awsEndpointUrl     = "aws-endpoint-url"
+	awsNoVerifySsl     = "aws-no-verify-ssl"
 )
 
 var (
@@ -31,18 +38,46 @@ func init() {
 			Usage:    "ISO source url to use as based image",
 			Required: true,
 		},
-
 		&cli.StringFlag{
 			Name:     "kickstart",
 			Aliases:  []string{"ks"},
 			Usage:    "Kickstart file to append to the iso",
 			Required: true,
 		},
-
 		&cli.StringFlag{
 			Name:  "arch",
 			Usage: "Arch to compile to, possible values: x86, aarch. Default x86",
 			Value: "x86",
+		},
+		&cli.StringFlag{
+			Name:  "upload-target",
+			Usage: "target to upload the s3 file to, like s3://mybucket/myfile.iso",
+		},
+		&cli.StringFlag{
+			Name:    awsAccessKeyId,
+			Usage:   "AWS_ACCESS_KEY_ID to store the iso on s3",
+			EnvVars: []string{"AWS_ACCESS_KEY_ID"},
+		},
+		&cli.StringFlag{
+			Name:    awsSecretAccessKey,
+			Usage:   "AWS_SECRET_ACCESS_KEY to store the iso on s3",
+			EnvVars: []string{"AWS_SECRET_ACCESS_KEY"},
+		},
+		&cli.StringFlag{
+			Name:    awsDefaultRegion,
+			Usage:   "AWS_DEFAULT_REGION to store the iso on s3",
+			EnvVars: []string{"AWS_DEFAULT_REGION"},
+		},
+		&cli.StringFlag{
+			Name:    awsEndpointUrl,
+			Usage:   "AWS_ENDPOINT_URL to use when uploading the iso image",
+			EnvVars: []string{"AWS_ENDPOINT_URL"},
+		},
+		&cli.BoolFlag{
+			Name:    awsNoVerifySsl,
+			Usage:   "AWS_NO_VERIFY_SSL to not validate ssl connection",
+			EnvVars: []string{"AWS_NO_VERIFY_SSL"},
+			Value:   false,
 		},
 	}
 }
@@ -67,7 +102,28 @@ func main() {
 			Kickstart: c.String("kickstart"),
 			Arch:      arch,
 		}
+
 		_, err := build.Run()
+		if err != nil {
+			return err
+		}
+		targetUpload := c.String("upload-target")
+		if targetUpload != "" {
+			creds := &S3Config{
+				awsAccessKeyId:     c.String(awsAccessKeyId),
+				awsSecretAccessKey: c.String(awsSecretAccessKey),
+				awsDefaultRegion:   c.String(awsDefaultRegion),
+				awsEndpointUrl:     c.String(awsEndpointUrl),
+				awsNoVerifySsl:     c.Bool(awsNoVerifySsl),
+			}
+
+			err := creds.Validate()
+			if err != nil {
+				return fmt.Errorf("cannot push information to s3: %v", err)
+			}
+
+			return build.Upload(creds, targetUpload)
+		}
 		return err
 	}
 
