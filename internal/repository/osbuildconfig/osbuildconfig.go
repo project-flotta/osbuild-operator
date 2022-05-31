@@ -2,6 +2,7 @@ package osbuildconfig
 
 import (
 	"context"
+	_ "github.com/golang/mock/mockgen/model"
 	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

@@ -125,8 +125,9 @@ endif
 	@exit
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: generate-tools controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	go generate ./...
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
