@@ -28,8 +28,36 @@ type OSBuildConfigTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of OSBuildConfigTemplate. Edit osbuildconfigtemplate_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Customizations defines the changes to be applied on top of the base image (optional)
+	Customizations *Customizations `json:"customizations,omitempty"`
+
+	// Iso specifies ISO-level customizations
+	Iso *IsoConfiguration `json:"iso,omitempty"`
+
+	// Parameters that are required by the template configuration (i.e. kickstart content)
+	Parameters []Parameter `json:"parameters,omitempty"`
+}
+
+type Parameter struct {
+	// Name of the parameter
+	Name string `json:"name"`
+	// Type of the parameter. Allowed values: string, int, bool.
+	// +kubebuilder:validation:Enum={string,int,bool}
+	Type string `json:"type"`
+	// DefaultValue specifies what parameter value should be used, if the parameter is not provided
+	DefaultValue string `json:"defaultValue"`
+}
+
+type IsoConfiguration struct {
+	// Kickstart provides content of Kickstart file that has to be added to the target ISO
+	Kickstart *KickstartFile `json:"kickstart,omitempty"`
+}
+
+type KickstartFile struct {
+	// Raw inline content of the Kickstart file
+	Raw *string `json:"raw,omitempty"`
+	// ConfigMapName name of a config map containing the Kickstart file under `kickstart` key
+	ConfigMapName *string `json:"configMapName,omitempty"`
 }
 
 // OSBuildConfigTemplateStatus defines the observed state of OSBuildConfigTemplate
