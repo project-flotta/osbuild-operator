@@ -175,6 +175,10 @@ vendor:
 	go mod tidy -go=1.17
 	go mod vendor
 
+
+build-iso: ## build fake iso
+	mkisofs -o testdata/fake_iso.iso testdata/iso_source
+
 ##@ Build
 
 .PHONY: build
