@@ -130,6 +130,10 @@ spec:
                 - distribution
                 - targetImage
                 type: object
+              kickstart:
+                description: Kickstart may store content of a kickstart file to be
+                  used in the target image
+                type: string
               triggeredBy:
                 description: TriggeredBy explains what triggered the build out
                 enum:
