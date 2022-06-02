@@ -28,6 +28,9 @@ type OSBuildSpec struct {
 	// Details defines what to build
 	Details BuildDetails `json:"details"`
 
+	// Kickstart may store content of a kickstart file to be used in the target image
+	Kickstart *string `json:"kickstart,omitempty"`
+
 	// TriggeredBy explains what triggered the build out
 	TriggeredBy TriggeredBy `json:"triggeredBy"`
 }
