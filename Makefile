@@ -159,7 +159,7 @@ lint: ## Check if the go code is properly written, rules are in .golangci.yml
 
 .PHONY: test
 test: ## Run tests.
-test: manifests generate fmt vet envtest get-iso## Run tests.
+test: manifests generate fmt vet envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 test-create-coverage:
@@ -287,6 +287,22 @@ else
 OPM = $(shell which opm)
 endif
 endif
+
+
+minio-certs-generate:
+	# Secrets are already created in a file, but expiration it's a year. Instead of
+	# creating a new one every pr, it's much better to have the secret file, and if
+	# no longer works, create a new secret file using this cert.
+	curl -L https://github.com/minio/certgen/releases/latest/download/certgen-linux-amd64 -o testdata/certgen
+	chmod 777 testdata/certgen
+	./testdata/certgen -host "*" -duration "876600h0m0s"
+	kubectl create secret generic tls-ssl-minio --from-file=private.key --from-file=public.crt --dry-run=client -o yaml > testdata/minio/secret.yaml
+
+minio-install: ## Install Minio on the current kubectl config
+	kubectl create ns minio || exit 0
+	kubectl -n minio apply -f testdata/minio/secret.yaml
+	kubectl -n minio apply -f testdata/minio/minio.yaml
+	kubectl wait --for=condition=Ready pods --all -n minio --timeout=60s
 
 # A comma-separated list of bundle images (e.g. make catalog-build BUNDLE_IMGS=example.com/operator-bundle:v0.1.0,example.com/operator-bundle:v0.2.0).
 # These images MUST exist in a registry and be pull-able.

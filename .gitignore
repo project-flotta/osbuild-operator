@@ -32,6 +32,7 @@ testbin/*
 coverage.html
 
 testdata/Fedora.iso
+
 testdata/certgen
-testdata/minio/private.key
-testdata/minio/public.crt
+private.key
+public.crt

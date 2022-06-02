@@ -1,0 +1,75 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-deployment
+spec:
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      initContainers:
+      - name: init-myservice
+        image: minio/minio:latest
+        command: ['mkdir', '-p', '/storage/test']
+        volumeMounts:
+        - name: storagedir
+          mountPath: /storage
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        args:
+        - server
+        - /storage
+        - --console-address
+        - ":9001"
+        env:
+        - name: MINIO_ROOT_USER
+          value: "minio"
+        - name: MINIO_ROOT_PASSWORD
+          value: "minio123"
+        ports:
+        - containerPort: 9000
+          hostPort: 9000
+        volumeMounts:
+        - name: secret-volume
+          mountPath: /root/.minio/certs
+        - name: storagedir
+          mountPath: /storage
+      volumes:
+      - name: storagedir
+        emptyDir: {}
+      - name: secret-volume
+        secret:
+          secretName: tls-ssl-minio
+          items:
+          - key: public.crt
+            path: public.crt
+          - key: private.key
+            path: private.key
+          - key: public.crt
+            path: CAs/public.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  selector:
+    app: minio
+  type: NodePort
+  ports:
+    - protocol: TCP
+      name: api
+      port: 9000
+      targetPort: 9000
+      nodePort: 30900
+    - protocol: TCP
+      name: portal
+      port: 9001
+      targetPort: 9001
+      nodePort: 30901
