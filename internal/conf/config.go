@@ -61,6 +61,9 @@ type OperatorConfig struct {
 
 	// RepositoriesDir is the path to the directory where the repositories information files are stored
 	RepositoriesDir string `envconfig:"REPOSITORIES_DIR" default:"/etc/osbuild/repositories"`
+
+	// BaseISOContainerImage is the container image to run the iso-package job
+	BaseISOContainerImage string `envconfig:"BASE_ISO_CONTAINER_IMAGE" required:"true" default:"controller:latest"`
 }
 
 var GlobalConf *OperatorConfig
