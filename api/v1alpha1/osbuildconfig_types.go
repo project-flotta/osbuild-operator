@@ -33,6 +33,24 @@ type OSBuildConfigSpec struct {
 	Details BuildDetails `json:"details"`
 	// Triggers defines when to build
 	Triggers BuildTriggers `json:"triggers"`
+	// Template specifying template configuration to use
+	Template *Template `json:"template,omitempty"`
+}
+
+// Template contains OSBuildConfigTemplate configuration
+type Template struct {
+	// OSBuildConfigTemplateRef specifies the name of OSBuildConfigTemplate resource
+	OSBuildConfigTemplateRef string `json:"osBuildConfigTemplateReg"`
+	// Parameters list parameter values for OS Build Config processing
+	Parameters []ParameterValue `json:"parameters,omitempty"`
+}
+
+// ParameterValue specifies a name-value pair
+type ParameterValue struct {
+	// Name of a parameter
+	Name string `json:"name"`
+	// Value of a parameter
+	Value string `json:"value"`
 }
 
 // BuildDetails includes all the information needed to build the image
@@ -106,8 +124,16 @@ type BuildTriggers struct {
 
 // OSBuildConfigStatus defines the observed state of OSBuildConfig
 type OSBuildConfigStatus struct {
-	// LastVersion denotes the number of the last OSBuild CR created for thie OSBuildConfig CR
+	// LastVersion denotes the number of the last OSBuild CR created for this OSBuildConfig CR
 	LastVersion *int `json:"lastVersion,omitempty"`
+
+	// LastTemplateResourceVersion denotes the version of the last OSBuildConfigTemplate resource used by this
+	// OSBuildConfig (value of OSBuildConfigTemplate's metadata.resourceVersion) to generate an OSBuild.
+	LastTemplateResourceVersion *string `json:"LastTemplateResourceVersion,omitempty"`
+
+	// CurrentTemplateResourceVersion denotes the most current version of the OSBuildConfigTemplate resource used by this
+	// OSBuildConfig (value of OSBuildConfigTemplate's metadata.resourceVersion).
+	CurrentTemplateResourceVersion *string `json:"CurrentTemplateResourceVersion,omitempty"`
 }
 
 //+kubebuilder:object:root=true
