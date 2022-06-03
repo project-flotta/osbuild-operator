@@ -182,6 +182,10 @@ spec:
           status:
             description: OSBuildStatus defines the observed state of OSBuild
             properties:
+              composer_iso:
+                description: ComposerIso is the URL for the iso that composer build
+                  returns before packaing with the kickstart
+                type: string
               conditions:
                 description: The conditions present the latest available observations
                   of a build's current state

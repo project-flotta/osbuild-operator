@@ -67,6 +67,11 @@ type OSBuildStatus struct {
 	// IsoUrl presents the url of the edge-installer image
 	// +optional
 	IsoUrl string `json:"isoUrl,omitempty"`
+
+	// +optional
+	// ComposerIso is the URL for the iso that composer build returns before
+	// packaing with the kickstart
+	ComposerIso string `json:"composer_iso,omitempty"`
 }
 
 type OSBuildCondition struct {
