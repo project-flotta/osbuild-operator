@@ -59,6 +59,11 @@ type OSBuildStatus struct {
 	// IsoComposeId presents compose id that was already started, for tracking a job of edge-installe
 	// +optional
 	IsoComposeId string `json:"isoComposeId,omitempty"`
+
+	// +optional
+	// ComposerIso is the URL for the iso that composer build returns before
+	// packaing with the kickstart
+	ComposerIso string `json:"composer_iso,omitempty"`
 }
 
 type OSBuildCondition struct {

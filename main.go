@@ -82,6 +82,7 @@ func init() {
 }
 
 func main() {
+
 	err := conf.Load()
 	if err != nil {
 		setupLog.Error(err, "failed to load the configuration")
