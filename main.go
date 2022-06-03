@@ -38,6 +38,7 @@ import (
 	"github.com/project-flotta/osbuild-operator/internal/indexer"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfigtemplate"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -93,14 +94,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	OSBuildConfigRepository := osbuildconfig.NewOSBuildConfigRepository(mgr.GetClient())
-	OSBuildRepository := osbuild.NewOSBuildRepository(mgr.GetClient())
+	osBuildConfigRepository := osbuildconfig.NewOSBuildConfigRepository(mgr.GetClient())
+	osBuildRepository := osbuild.NewOSBuildRepository(mgr.GetClient())
+	osBuildConfigTemplateRepository := osbuildconfigtemplate.NewOSBuildConfigTemplateRepository(mgr.GetClient())
 
 	if err = (&controllers.OSBuildConfigReconciler{
-		Client:                  mgr.GetClient(),
-		Scheme:                  mgr.GetScheme(),
-		OSBuildConfigRepository: OSBuildConfigRepository,
-		OSBuildRepository:       OSBuildRepository,
+		Client:                          mgr.GetClient(),
+		Scheme:                          mgr.GetScheme(),
+		OSBuildConfigRepository:         osBuildConfigRepository,
+		OSBuildRepository:               osBuildRepository,
+		OSBuildConfigTemplateRepository: osBuildConfigTemplateRepository,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildConfig")
 		os.Exit(1)
@@ -137,7 +140,7 @@ func main() {
 	if err = (&controllers.OSBuildConfigTemplateReconciler{
 		Client:                  mgr.GetClient(),
 		Scheme:                  mgr.GetScheme(),
-		OSBuildConfigRepository: OSBuildConfigRepository,
+		OSBuildConfigRepository: osBuildConfigRepository,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildConfigTemplate")
 		os.Exit(1)
