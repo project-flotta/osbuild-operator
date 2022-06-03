@@ -130,6 +130,33 @@ spec:
                 - distribution
                 - targetImage
                 type: object
+              template:
+                description: Template specifying template configuration to use
+                properties:
+                  osBuildConfigTemplateRef:
+                    description: OSBuildConfigTemplateRef specifies the name of OSBuildConfigTemplate
+                      resource
+                    type: string
+                  parameters:
+                    description: Parameters list parameter values for OS Build Config
+                      processing
+                    items:
+                      description: ParameterValue specifies a name-value pair
+                      properties:
+                        name:
+                          description: Name of a parameter
+                          type: string
+                        value:
+                          description: Value of a parameter
+                          type: string
+                      required:
+                      - name
+                      - value
+                      type: object
+                    type: array
+                required:
+                - osBuildConfigTemplateRef
+                type: object
               triggers:
                 description: Triggers defines when to build
                 properties:
@@ -173,9 +200,20 @@ spec:
           status:
             description: OSBuildConfigStatus defines the observed state of OSBuildConfig
             properties:
+              CurrentTemplateResourceVersion:
+                description: CurrentTemplateResourceVersion denotes the most current
+                  version of the OSBuildConfigTemplate resource used by this OSBuildConfig
+                  (value of OSBuildConfigTemplate's metadata.resourceVersion).
+                type: string
+              LastTemplateResourceVersion:
+                description: LastTemplateResourceVersion denotes the version of the
+                  last OSBuildConfigTemplate resource used by this OSBuildConfig (value
+                  of OSBuildConfigTemplate's metadata.resourceVersion) to generate
+                  an OSBuild.
+                type: string
               lastVersion:
                 description: LastVersion denotes the number of the last OSBuild CR
-                  created for thie OSBuildConfig CR
+                  created for this OSBuildConfig CR
                 type: integer
             type: object
         type: object
