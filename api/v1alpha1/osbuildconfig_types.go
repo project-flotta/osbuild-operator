@@ -40,7 +40,7 @@ type OSBuildConfigSpec struct {
 // Template contains OSBuildConfigTemplate configuration
 type Template struct {
 	// OSBuildConfigTemplateRef specifies the name of OSBuildConfigTemplate resource
-	OSBuildConfigTemplateRef string `json:"osBuildConfigTemplateReg"`
+	OSBuildConfigTemplateRef string `json:"osBuildConfigTemplateRef"`
 	// Parameters list parameter values for OS Build Config processing
 	Parameters []ParameterValue `json:"parameters,omitempty"`
 }
