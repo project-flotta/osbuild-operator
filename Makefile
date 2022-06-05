@@ -158,9 +158,13 @@ lint: ## Check if the go code is properly written, rules are in .golangci.yml
 	$(CONTAINER_RUNTIME) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(LINT_IMAGE) sh -c 'golangci-lint run'
 
 .PHONY: test
-test: ## Run tests.
+test: ## Run tests
 test: manifests generate fmt vet envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
+test: test-fast
+
+TEST_PACKAGES := ./...
+test-fast: ginkgo
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" $(GINKGO) --cover -output-dir=. -coverprofile=cover.out -v -progress $(GINKGO_OPTIONS) $(TEST_PACKAGES)
 
 test-create-coverage:
 	sed -i '/mock_/d' cover.out
@@ -331,4 +335,11 @@ catalog-push: ## Push a catalog image.
 get-iso:
 ifeq (,$(wildcard ./testdata/Fedora.iso))
 	curl -L https://download.fedoraproject.org/pub/fedora/linux/releases/36/Server/x86_64/iso/Fedora-Server-netinst-x86_64-36-1.5.iso -o testdata/Fedora.iso
+endif
+
+GINKGO = $(shell pwd)/bin/ginkgo
+.PHONY: ginkgo
+ginkgo: ## Download ginkgo locally if necessary.
+ifeq (, $(wildcard $(GINKGO)))
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@v2.1.3)
 endif
