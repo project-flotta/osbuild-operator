@@ -8,6 +8,10 @@ This repo has the operator which provides a K8S API for building [OSBuild](https
 
 - `go >= 1.17`
 
+### Test Requirements
+- `genisoimage`
+- `xorriso`
+
 ## Getting started
 
 ### Deployment
