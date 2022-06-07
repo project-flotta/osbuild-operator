@@ -131,9 +131,17 @@ spec:
                 - targetImage
                 type: object
               kickstart:
-                description: Kickstart may store content of a kickstart file to be
-                  used in the target image
-                type: string
+                description: Kickstart is a reference to a configmap that may store
+                  content of a kickstart file to be used in the target image
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                  optional:
+                    description: Specify whether the ConfigMap must be defined
+                    type: boolean
+                type: object
               triggeredBy:
                 description: TriggeredBy explains what triggered the build out
                 enum:

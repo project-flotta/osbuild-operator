@@ -18,6 +18,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	v1 "k8s.io/api/core/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -28,8 +30,9 @@ type OSBuildSpec struct {
 	// Details defines what to build
 	Details BuildDetails `json:"details"`
 
-	// Kickstart may store content of a kickstart file to be used in the target image
-	Kickstart *string `json:"kickstart,omitempty"`
+	// Kickstart is a reference to a configmap that may store content of a
+	// kickstart file to be used in the target image
+	Kickstart *v1.ConfigMapEnvSource `json:"kickstart,omitempty" protobuf:"bytes,2,opt,name=kickstart"`
 
 	// TriggeredBy explains what triggered the build out
 	TriggeredBy TriggeredBy `json:"triggeredBy"`
