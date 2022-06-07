@@ -22,7 +22,8 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/openshift/api/build/v1"
+	buildv1 "github.com/openshift/api/build/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -73,7 +74,7 @@ func (in *BuildTriggers) DeepCopyInto(out *BuildTriggers) {
 	}
 	if in.WebHook != nil {
 		in, out := &in.WebHook, &out.WebHook
-		*out = new(v1.WebHookTrigger)
+		*out = new(buildv1.WebHookTrigger)
 		(*in).DeepCopyInto(*out)
 	}
 }
@@ -183,7 +184,7 @@ func (in *GenericS3ServiceConfig) DeepCopyInto(out *GenericS3ServiceConfig) {
 	out.CredsSecretReference = in.CredsSecretReference
 	if in.CABundleSecretReference != nil {
 		in, out := &in.CABundleSecretReference, &out.CABundleSecretReference
-		*out = new(v1.SecretLocalReference)
+		*out = new(buildv1.SecretLocalReference)
 		**out = **in
 	}
 	if in.SkipSSLVerification != nil {
@@ -640,8 +641,8 @@ func (in *OSBuildSpec) DeepCopyInto(out *OSBuildSpec) {
 	in.Details.DeepCopyInto(&out.Details)
 	if in.Kickstart != nil {
 		in, out := &in.Kickstart, &out.Kickstart
-		*out = new(string)
-		**out = **in
+		*out = new(v1.ConfigMapEnvSource)
+		(*in).DeepCopyInto(*out)
 	}
 }
 
