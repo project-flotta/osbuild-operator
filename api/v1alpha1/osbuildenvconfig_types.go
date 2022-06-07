@@ -125,17 +125,8 @@ type AWSS3ServiceConfig struct {
 }
 
 type GenericS3ServiceConfig struct {
-	// CredsSecretReference is a reference to a secret in the same namespace,
-	// containing the connection credentials for the S3 service
-	// The required keys are access-key-id and secret-access-key
-	// +kubebuilder:validation:Required
-	CredsSecretReference buildv1.SecretLocalReference `json:"credsSecretReference"`
-	// Region is the region to use when connecting to the S3 service
-	// +kubebuilder:validation:Required
-	Region string `json:"region"`
-	// Bucket is the bucket to store images in
-	// +kubebuilder:validation:Required
-	Bucket string `json:"bucket"`
+	*AWSS3ServiceConfig `json:",inline"`
+
 	// Endpoint is the URL of the S3 service
 	// +kubebuilder:validation:Required
 	Endpoint string `json:"endpoint"`
