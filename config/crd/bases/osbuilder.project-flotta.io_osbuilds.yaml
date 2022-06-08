@@ -135,12 +135,10 @@ spec:
                   content of a kickstart file to be used in the target image
                 properties:
                   name:
-                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    description: The ConfigMap to select from.
                     type: string
-                  optional:
-                    description: Specify whether the ConfigMap must be defined
-                    type: boolean
+                required:
+                - name
                 type: object
               triggeredBy:
                 description: TriggeredBy explains what triggered the build out
