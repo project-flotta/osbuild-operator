@@ -39,6 +39,9 @@ var (
 	crAlreadyExists = osBuildEnvConfigError{
 		error: "an OSBuildEnvConfig already exists",
 	}
+	workerNamesNotUnique = osBuildEnvConfigError{
+		error: "worker names must be unique",
+	}
 	updateNotSupported = osBuildEnvConfigError{
 		error: "OSBuildEnvConfig cannot be updated",
 	}
@@ -77,6 +80,20 @@ var _ webhook.Validator = &OSBuildEnvConfig{}
 func (r *OSBuildEnvConfig) ValidateCreate() error {
 	osbuildenvconfiglog.Info("validate create", "name", r.Name)
 
+	err := validateSingleton()
+	if err != nil {
+		return err
+	}
+
+	err = validateUniqueWorkerNames(r.Spec.Workers)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateSingleton() error {
 	ctx := context.Background()
 	osBuildEnvConfigList := OSBuildEnvConfigList{}
 	err := kClient.List(ctx, &osBuildEnvConfigList)
@@ -88,6 +105,17 @@ func (r *OSBuildEnvConfig) ValidateCreate() error {
 		return crAlreadyExists
 	}
 
+	return nil
+}
+
+func validateUniqueWorkerNames(workers []WorkerConfig) error {
+	workerNames := make(map[string]struct{})
+	for _, worker := range workers {
+		if _, exists := workerNames[worker.Name]; exists {
+			return workerNamesNotUnique
+		}
+		workerNames[worker.Name] = struct{}{}
+	}
 	return nil
 }
 

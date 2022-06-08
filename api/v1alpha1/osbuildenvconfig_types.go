@@ -31,7 +31,7 @@ type OSBuildEnvConfigSpec struct {
 	Composer *ComposerConfig `json:"composer"`
 	// Workers is a list of WorkerConfig each providing the configuration required for a worker
 	// +kubebuilder:validation:Required
-	Workers []WorkerConfig `json:"workers"`
+	Workers WorkersConfig `json:"workers"`
 	// RedHatCredsSecretReference is a reference to a secret in the same namespace,
 	// containing the RedHat Portal credentials to be used by the Worker machines
 	// The expected keys are username and password
@@ -63,7 +63,13 @@ type ComposerDBConfig struct {
 // +kubebuilder:validation:Enum=disable;allow;prefer;require;verify-ca;verify-full
 type DBSSLMode string
 
+// +kubebuilder:validation:MinItems=1
+type WorkersConfig []WorkerConfig
+
 type WorkerConfig struct {
+	// Name is a unique identifier for the Worker
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
 	// VMWorkerConfig hold the configuration needed to start a managed VM to act as a Worker
 	//
 	// +kubebuilder:validation:OneOf

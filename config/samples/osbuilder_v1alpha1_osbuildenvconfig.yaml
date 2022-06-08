@@ -9,7 +9,8 @@ spec:
         name: composer-db
       sslMode: disable
   workers:
-  - vmWorkerConfig:
+  - name: worker-1
+    vmWorkerConfig:
       architecture: x86_64
       imageURL: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.5-x86_64-kvm.qcow2"
   redHatCredsSecretReference:

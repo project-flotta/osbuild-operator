@@ -31,6 +31,16 @@ var _ = Describe("OSBuildEnvConfig Webhook", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: osbuildEnvConfigName,
 			},
+			Spec: OSBuildEnvConfigSpec{
+				Workers: []WorkerConfig{
+					{
+						Name: "worker-1",
+					},
+					{
+						Name: "worker-2",
+					},
+				},
+			},
 		}
 		osbuildEnvConfigList = OSBuildEnvConfigList{
 			Items: []OSBuildEnvConfig{
@@ -70,6 +80,16 @@ var _ = Describe("OSBuildEnvConfig Webhook", func() {
 			err := osbuildEnvConfig.ValidateCreate()
 			// then
 			Expect(err).To(Equal(crAlreadyExists))
+		})
+
+		It("Non-unique worker names should fail", func() {
+			// given
+			kClient = clientBuilder.Build()
+			osbuildEnvConfig.Spec.Workers[1].Name = osbuildEnvConfig.Spec.Workers[0].Name
+			// when
+			err := osbuildEnvConfig.ValidateCreate()
+			// then
+			Expect(err).To(Equal(workerNamesNotUnique))
 		})
 	})
 
