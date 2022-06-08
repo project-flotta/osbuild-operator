@@ -203,6 +203,9 @@ spec:
                       - redHatCredsSecretReference
                       - user
                       type: object
+                    name:
+                      description: Name is a unique identifier for the Worker
+                      type: string
                     vmWorkerConfig:
                       description: VMWorkerConfig hold the configuration needed to
                         start a managed VM to act as a Worker
@@ -221,7 +224,10 @@ spec:
                       required:
                       - imageURL
                       type: object
+                  required:
+                  - name
                   type: object
+                minItems: 1
                 type: array
             required:
             - redHatCredsSecretReference
