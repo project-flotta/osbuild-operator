@@ -1,14 +1,10 @@
 apiVersion: osbuilder.project-flotta.io/v1alpha1
 kind: OSBuildConfig
 metadata:
-  name: osbuildconfig-sample
+  name: flotta
 spec:
   details:
-    distribution: fedora-35
-    customizations:
-      packages:
-        - node_exporter
-        - ansible
+    distribution: rhel8
     targetImage:
       architecture: x86_64
       targetImageType: edge-container
@@ -16,9 +12,9 @@ spec:
         url: "https://hostedimagesserver.flotta.io/"
         ref: "rhel/8/x86_64/edge"
   template:
-    osBuildConfigTemplateRef: osbuildconfigtemplate-sample
+    osBuildConfigTemplateRef: flotta-template
     parameters:
-      - name: foo
-        value: bar
+      - name: REPO_URL
+        value: https://hostedimagesserver.flotta.io
   triggers:
     configChange: true
