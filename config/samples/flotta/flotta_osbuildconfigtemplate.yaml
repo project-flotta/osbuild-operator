@@ -1,0 +1,45 @@
+apiVersion: osbuilder.project-flotta.io/v1alpha1
+kind: OSBuildConfigTemplate
+metadata:
+  name: flotta-template
+spec:
+  customizations:
+    packages:
+      - yggdrasil
+      - flotta-agent
+      - dmidecode
+      - ipmitool
+      - smartmontools
+      - file
+      - util-linux
+      - node_exporter
+      - ansible
+    services:
+      enabled:
+        - node_exporter
+        - nftables
+        - podman.socket
+        - podman
+      disabled:
+        - firewalld
+    users:
+      - name: flotta
+        groups:
+          - flotta
+        pubKey: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDCNJMWIwjaKO1A+K64+qZmqFA0xtTX+VDNNggBZiCVCc+2jeXJ5zapBeime+8lUmdjdRPxFqyWm+8vOX28b0YUyVlU25SvEGUsJACTBvidMMDgVpdQM0LICtF2VIwYTwEx9Y+2DsQmpae3/+rG2hP8mB2XCh79mDjN63DF/78qOlCfr5D6XZ4cUtQmH3QHbE13bv1v6E2fIxfZM5V1YCmAv+lBjlvC3EZyTGRWU4+fNkjzii478/1F0XUBlQkDzXHepOFtqLzAwleMdQdl9R0LJLM/y5YhV43mfL1e704/BIXITUBX7qiDL83T++SaCXc+HFekN5jRLq0RtzHmsv7T6VrErcagXyoPdJkiHjTnObNQdmSuM/31ZXc+PXti50krq3+lcKX9eFFxHJl8uOVMW9vtt9jykUS0fyDrd7TOsHrPNQkn//vraP24iLays9SvLsdC4inM9JMFVeJp1Q0aSeRKAVSuaHjR0zyuaB0mlHS5JjoZPjTFUDRSDvE8STs= flotta
+  iso:
+    kickstart:
+      configMapName: flotta-kickstart-template
+  parameters:
+    - name: REPO_URL
+      defaultValue: fix-me
+      type: string
+    - name: OS_NAME
+      defaultValue: edge
+      type: string
+    - name: REMOTE_OS_NAME
+      defaultValue: edge
+      type: string
+    - name: REF
+      defaultValue: rhel/8/x86_64/edge
+      type: string
