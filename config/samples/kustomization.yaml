@@ -3,4 +3,5 @@ resources:
 - osbuilder_v1alpha1_osbuildconfig.yaml
 - osbuilder_v1alpha1_osbuild.yaml
 - _v1alpha1_osbuildenvconfig.yaml
+- osbuilder.project-flotta.io_v1alpha1_osbuildconfigtemplate.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

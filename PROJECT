@@ -30,14 +30,12 @@ resources:
 - api:
     crdVersion: v1
     namespaced: true
-  controller: false
   domain: osbuilder.project-flotta.io
   kind: OSBuildConfigTemplate
   path: github.com/project-flotta/osbuild-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
-    namespaced: false
   controller: true
   domain: osbuilder.project-flotta.io
   kind: OSBuildEnvConfig
@@ -47,4 +45,9 @@ resources:
     defaulting: true
     validation: true
     webhookVersion: v1
+- controller: true
+  domain: osbuilder.project-flotta.io
+  group: osbuilder.project-flotta.io
+  kind: OSBuildConfigTemplate
+  version: v1alpha1
 version: "3"
