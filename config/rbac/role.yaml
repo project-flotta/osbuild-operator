@@ -83,3 +83,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - osbuilder.project-flotta.io.osbuilder.project-flotta.io
+  resources:
+  - osbuildconfigtemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - osbuilder.project-flotta.io.osbuilder.project-flotta.io
+  resources:
+  - osbuildconfigtemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osbuilder.project-flotta.io.osbuilder.project-flotta.io
+  resources:
+  - osbuildconfigtemplates/status
+  verbs:
+  - get
+  - patch
+  - update
