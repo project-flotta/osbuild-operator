@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,9 +32,9 @@ type OSBuildConfigTemplateReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=osbuilder.project-flotta.io.osbuilder.project-flotta.io,resources=osbuildconfigtemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=osbuilder.project-flotta.io.osbuilder.project-flotta.io,resources=osbuildconfigtemplates/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=osbuilder.project-flotta.io.osbuilder.project-flotta.io,resources=osbuildconfigtemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildconfigtemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildconfigtemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildconfigtemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -55,7 +56,6 @@ func (r *OSBuildConfigTemplateReconciler) Reconcile(ctx context.Context, req ctr
 // SetupWithManager sets up the controller with the Manager.
 func (r *OSBuildConfigTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
-		// For().
+		For(&osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate{}).
 		Complete(r)
 }

@@ -5,6 +5,7 @@ resources:
 - bases/osbuilder.project-flotta.io_osbuildconfigs.yaml
 - bases/osbuilder.project-flotta.io_osbuilds.yaml
 - bases/osbuilder.project-flotta.io_osbuildenvconfigs.yaml
+- bases/osbuilder.project-flotta.io_osbuildconfigtemplates.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
