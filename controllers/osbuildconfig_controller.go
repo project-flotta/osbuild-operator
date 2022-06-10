@@ -18,10 +18,10 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
 	"github.com/go-logr/logr"
-	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,7 +29,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 )
+
+var zero int
 
 // OSBuildConfigReconciler reconciles a OSBuildConfig object
 type OSBuildConfigReconciler struct {
@@ -79,12 +85,17 @@ func (r *OSBuildConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig, logger logr.Logger) error {
-	osBuildNewVersion := *osBuildConfig.Status.LastVersion + 1
+	lastVersion := osBuildConfig.Status.LastVersion
+	if lastVersion == nil {
+		lastVersion = &zero
+	}
+	osBuildNewVersion := *lastVersion + 1
 
 	osBuildConfigSpecDetails := osBuildConfig.Spec.Details.DeepCopy()
 	osBuild := &osbuilderprojectflottaiov1alpha1.OSBuild{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: osBuildConfig.Name + "-" + string(rune(osBuildNewVersion)),
+			Name:      fmt.Sprintf("%s-%d", osBuildConfig.Name, osBuildNewVersion),
+			Namespace: osBuildConfig.Namespace,
 		},
 		Spec: osbuilderprojectflottaiov1alpha1.OSBuildSpec{
 			Details:     *osBuildConfigSpecDetails,
@@ -114,7 +125,7 @@ func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuil
 		return err
 	}
 
-	logger.Info("A new OSBuild CR was created", osBuild.Name)
+	logger.Info("A new OSBuild CR was created", "OSBuild", osBuild.Name)
 
 	return nil
 }
@@ -123,5 +134,7 @@ func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuil
 func (r *OSBuildConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&osbuilderprojectflottaiov1alpha1.OSBuildConfig{}).
+		// Process only spec changes
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
