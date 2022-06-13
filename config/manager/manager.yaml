@@ -29,8 +29,6 @@ spec:
       containers:
       - command:
         - /manager
-        args:
-        - --leader-elect
         image: controller:latest
         name: manager
         securityContext:
@@ -56,5 +54,13 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
+        env:
+        - name: WORKING_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        envFrom:
+        - configMapRef:
+            name: manager-config
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

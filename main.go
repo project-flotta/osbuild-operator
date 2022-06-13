@@ -18,13 +18,13 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -34,6 +34,7 @@ import (
 
 	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"github.com/project-flotta/osbuild-operator/controllers"
+	"github.com/project-flotta/osbuild-operator/internal/conf"
 	"github.com/project-flotta/osbuild-operator/internal/indexer"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
@@ -45,12 +46,6 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-var Config struct {
-	// If Webhooks are enabled, an admission webhook is created and checked when
-	// any user submits any change to any "osbuilder.project-flotta.io" CRD.
-	EnableWebhooks bool `envconfig:"ENABLE_WEBHOOKS" default:"true"`
-}
-
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
@@ -59,29 +54,32 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	opts := zap.Options{
-		Development: true,
+	err := conf.Load()
+	if err != nil {
+		setupLog.Error(err, "failed to load the configuration")
+		os.Exit(1)
 	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
 
+	var level zapcore.Level
+	err = level.UnmarshalText([]byte(conf.GlobalConf.LogLevel))
+	if err != nil {
+		setupLog.Error(err, "unable to unmarshal log level", "log level", conf.GlobalConf.LogLevel)
+		os.Exit(1)
+	}
+	opts := zap.Options{}
+	opts.Level = level
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	setupLog = ctrl.Log
+	setupLog.Info("Started with configuration", "configuration", conf.GlobalConf)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "bfdcaedc.osbuilder.project-flotta.io",
+		MetricsBindAddress:     conf.GlobalConf.MetricsAddr,
+		Port:                   conf.GlobalConf.WebhookPort,
+		HealthProbeBindAddress: conf.GlobalConf.ProbeAddr,
+		LeaderElection:         conf.GlobalConf.EnableLeaderElection,
+		LeaderElectionID:       conf.GlobalConf.LeaderElectionResourceName,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -109,7 +107,7 @@ func main() {
 	}
 
 	// webhooks
-	if Config.EnableWebhooks {
+	if conf.GlobalConf.EnableWebhooks {
 		if err = (&v1alpha1.OSBuildConfig{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OSBuildConfig")
 			os.Exit(1)
@@ -130,9 +128,11 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildEnvConfig")
 		os.Exit(1)
 	}
-	if err = (&v1alpha1.OSBuildEnvConfig{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OSBuildEnvConfig")
-		os.Exit(1)
+	if conf.GlobalConf.EnableWebhooks {
+		if err = (&v1alpha1.OSBuildEnvConfig{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OSBuildEnvConfig")
+			os.Exit(1)
+		}
 	}
 	if err = (&controllers.OSBuildConfigTemplateReconciler{
 		Client:                  mgr.GetClient(),

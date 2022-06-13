@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/kdomanski/iso9660 v0.3.1
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
 	github.com/u-root/u-root v0.8.0

@@ -36,3 +36,5 @@ testdata/Fedora.iso
 testdata/certgen
 private.key
 public.crt
+
+.vscode/
