@@ -75,19 +75,19 @@ type Customizations struct {
 
 // User defines a single user to be configured
 type User struct {
+	// Groups is the groups to add the user to (optional)
+	Groups *[]string `json:"groups,omitempty"`
+	// Key is the user's SSH public key (optional)
+	Key *string `json:"key,omitempty"`
 	// Name is the username for the new user
 	Name string `json:"name"`
-	// Groups is the groups to add the user to (optional)
-	Groups []string `json:"groups,omitempty"`
-	// Key is the user's SSH public key (optional)
-	PubKey *string `json:"pubKey,omitempty"`
 }
 
 type Services struct {
-	// Enabled is the list of services to enabled (optional)
-	Enabled []string `json:"enabled,omitempty"`
-	// Disabled is the list of services to disabled (optional)
+	// List of services to disable by default
 	Disabled []string `json:"disabled,omitempty"`
+	// List of services to enable by default
+	Enabled []string `json:"enabled,omitempty"`
 }
 
 type TargetImage struct {
@@ -107,12 +107,12 @@ type TargetImageType string
 
 // OSTreeConfig defines the OSTree ref details
 type OSTreeConfig struct {
-	// URL is the URL of the target build (Optional)
-	URL *string `json:"url,omitempty"`
-	// Ref is the ref of the target build (Optional)
-	Ref *string `json:"ref,omitempty"`
 	// Parent is the ref of the parent of target build (Optional)
 	Parent *string `json:"parent,omitempty"`
+	// Ref is the ref of the target build (Optional)
+	Ref *string `json:"ref,omitempty"`
+	// Url is the Url of the target build (Optional)
+	Url *string `json:"url,omitempty"`
 }
 
 type BuildTriggers struct {

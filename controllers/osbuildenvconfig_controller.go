@@ -54,7 +54,7 @@ const (
 
 	composerCertificateName = "composer-cert"
 
-	composerComposerAPIServiceName = "osbuild-composer"
+	ComposerComposerAPIServiceName = "osbuild-composer"
 	composerComposerAPIPortName    = "composer-api"
 	composerWorkerAPIServiceName   = "osbuild-worker"
 	composerWorkerAPIPortName      = "worker-api"
@@ -196,7 +196,7 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 		instance,
 		composerCertificateName,
 		[]string{
-			composerComposerAPIServiceName,
+			ComposerComposerAPIServiceName,
 			composerWorkerAPIServiceName,
 		},
 	)
@@ -449,7 +449,7 @@ func (r *OSBuildEnvConfigReconciler) generateComposerDeployment(composerDeployme
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureComposerComposerAPIServiceExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig, composerDeploymentParams *composerDeploymentParameters) (bool, error) {
-	return r.ensureComposerServiceExists(ctx, composerComposerAPIServiceName, composerComposerAPIPortName, composerDeploymentParams.ComposerAPIExternalPort, instance)
+	return r.ensureComposerServiceExists(ctx, ComposerComposerAPIServiceName, composerComposerAPIPortName, composerDeploymentParams.ComposerAPIExternalPort, instance)
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureComposerWorkerAPIServiceExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig, composerDeploymentParams *composerDeploymentParameters) (bool, error) {

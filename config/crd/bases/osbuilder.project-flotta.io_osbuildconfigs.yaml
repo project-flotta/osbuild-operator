@@ -53,14 +53,12 @@ spec:
                           (optional)
                         properties:
                           disabled:
-                            description: Disabled is the list of services to disabled
-                              (optional)
+                            description: List of services to disable by default
                             items:
                               type: string
                             type: array
                           enabled:
-                            description: Enabled is the list of services to enabled
-                              (optional)
+                            description: List of services to enable by default
                             items:
                               type: string
                             type: array
@@ -77,11 +75,11 @@ spec:
                               items:
                                 type: string
                               type: array
+                            key:
+                              description: Key is the user's SSH public key (optional)
+                              type: string
                             name:
                               description: Name is the username for the new user
-                              type: string
-                            pubKey:
-                              description: Key is the user's SSH public key (optional)
                               type: string
                           required:
                           - name
@@ -113,7 +111,7 @@ spec:
                             description: Ref is the ref of the target build (Optional)
                             type: string
                           url:
-                            description: URL is the URL of the target build (Optional)
+                            description: Url is the Url of the target build (Optional)
                             type: string
                         type: object
                       targetImageType:

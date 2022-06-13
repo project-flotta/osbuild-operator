@@ -11,6 +11,8 @@ import (
 type Repository interface {
 	Read(ctx context.Context, name string, namespace string) (*v1alpha1.OSBuild, error)
 	Create(ctx context.Context, osBuild *v1alpha1.OSBuild) error
+	PatchStatus(ctx context.Context, osbuild *v1alpha1.OSBuild, patch *client.Patch) error
+	Patch(ctx context.Context, old, new *v1alpha1.OSBuild) error
 }
 
 type CRRepository struct {
@@ -29,4 +31,13 @@ func (r *CRRepository) Read(ctx context.Context, name string, namespace string) 
 
 func (r *CRRepository) Create(ctx context.Context, osBuild *v1alpha1.OSBuild) error {
 	return r.client.Create(ctx, osBuild)
+}
+
+func (r *CRRepository) PatchStatus(ctx context.Context, osbuild *v1alpha1.OSBuild, patch *client.Patch) error {
+	return r.client.Status().Patch(ctx, osbuild, *patch)
+}
+
+func (r *CRRepository) Patch(ctx context.Context, old, new *v1alpha1.OSBuild) error {
+	patch := client.MergeFrom(old)
+	return r.client.Patch(ctx, new, patch)
 }

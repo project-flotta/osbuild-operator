@@ -151,7 +151,7 @@ spec:
                         - name
                         type: object
                       endpoint:
-                        description: Endpoint is the URL of the S3 service
+                        description: Endpoint is the Url of the S3 service
                         type: string
                       region:
                         description: Region is the region to use when connecting to

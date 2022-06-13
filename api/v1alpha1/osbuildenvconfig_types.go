@@ -133,7 +133,7 @@ type AWSS3ServiceConfig struct {
 type GenericS3ServiceConfig struct {
 	*AWSS3ServiceConfig `json:",inline"`
 
-	// Endpoint is the URL of the S3 service
+	// Endpoint is the Url of the S3 service
 	// +kubebuilder:validation:Required
 	Endpoint string `json:"endpoint"`
 	// CABundleSecretReference is a reference to a secret in the same namespace,
