@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	userA = v1alpha1.User{Name: "A", Groups: []string{"a"}}
-	userB = v1alpha1.User{Name: "B", Groups: []string{"b1", "b2"}}
+	userA = v1alpha1.User{Name: "A", Groups: &[]string{"a"}}
+	userB = v1alpha1.User{Name: "B", Groups: &[]string{"b1", "b2"}}
 	userC = v1alpha1.User{Name: "C"}
 
 	noUsers []v1alpha1.User
