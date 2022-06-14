@@ -19,8 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/internal/predicates"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 )
@@ -134,7 +133,7 @@ func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuil
 func (r *OSBuildConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&osbuilderprojectflottaiov1alpha1.OSBuildConfig{}).
-		// Process only spec changes
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		// Process only spec changes or when related template versions diverge
+		WithEventFilter(predicates.OSBuildConfigChangedPredicate{}).
 		Complete(r)
 }
