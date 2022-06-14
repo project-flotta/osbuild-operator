@@ -18,8 +18,11 @@ package controllers
 
 import (
 	"context"
-	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
 
+	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
+
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,7 +32,8 @@ import (
 // OSBuildConfigTemplateReconciler reconciles a OSBuildConfigTemplate object
 type OSBuildConfigTemplateReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme                  *runtime.Scheme
+	OSBuildConfigRepository osbuildconfig.Repository
 }
 
 //+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildconfigtemplates,verbs=get;list;watch;create;update;patch;delete
@@ -46,9 +50,22 @@ type OSBuildConfigTemplateReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *OSBuildConfigTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
+	logger.Info("Reconciling", "OSBuildConfigTemplate", req)
 
-	// TODO(user): your logic here
+	configs, err := r.OSBuildConfigRepository.ListByOSBuildConfigTemplate(ctx, req.Name, req.Namespace)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		logger.Error(err, "Cannot get configs by template")
+		return ctrl.Result{}, err
+	}
+	var names []string
+	for _, config := range configs {
+		names = append(names, config.Name)
+	}
+	logger.Info("Found OSBuildConfigs for OSBuildConfigTemplate", "configs", names, "template", req.Name)
 
 	return ctrl.Result{}, nil
 }
@@ -56,6 +73,6 @@ func (r *OSBuildConfigTemplateReconciler) Reconcile(ctx context.Context, req ctr
 // SetupWithManager sets up the controller with the Manager.
 func (r *OSBuildConfigTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate{}).
+		For(&v1alpha1.OSBuildConfigTemplate{}).
 		Complete(r)
 }
