@@ -17,11 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
-
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -34,8 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"github.com/project-flotta/osbuild-operator/controllers"
+	"github.com/project-flotta/osbuild-operator/internal/indexer"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -53,7 +54,7 @@ var Config struct {
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(osbuilderprojectflottaiov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -87,6 +88,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx := context.Background()
+	err = mgr.GetFieldIndexer().IndexField(ctx, &v1alpha1.OSBuildConfig{}, indexer.ConfigByConfigTemplate, indexer.ConfigByTemplateIndexFunc)
+	if err != nil {
+		setupLog.Error(err, "Failed to create indexer for OSBuildConfig")
+		os.Exit(1)
+	}
+
 	OSBuildConfigRepository := osbuildconfig.NewOSBuildConfigRepository(mgr.GetClient())
 	OSBuildRepository := osbuild.NewOSBuildRepository(mgr.GetClient())
 
@@ -102,7 +110,7 @@ func main() {
 
 	// webhooks
 	if Config.EnableWebhooks {
-		if err = (&osbuilderprojectflottaiov1alpha1.OSBuildConfig{}).SetupWebhookWithManager(mgr); err != nil {
+		if err = (&v1alpha1.OSBuildConfig{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OSBuildConfig")
 			os.Exit(1)
 		}
@@ -122,7 +130,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildEnvConfig")
 		os.Exit(1)
 	}
-	if err = (&osbuilderprojectflottaiov1alpha1.OSBuildEnvConfig{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&v1alpha1.OSBuildEnvConfig{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "OSBuildEnvConfig")
 		os.Exit(1)
 	}
