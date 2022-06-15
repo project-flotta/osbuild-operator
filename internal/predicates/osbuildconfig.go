@@ -25,11 +25,9 @@ func (OSBuildConfigChangedPredicate) Update(e event.UpdateEvent) bool {
 	}
 
 	generationChanged := e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration()
-
 	var templateChanged bool
 	if newConfig.Status.LastTemplateResourceVersion != nil && newConfig.Status.CurrentTemplateResourceVersion != nil {
-		templateChanged = newConfig.Status.LastTemplateResourceVersion != newConfig.Status.CurrentTemplateResourceVersion
+		templateChanged = *newConfig.Status.LastTemplateResourceVersion != *newConfig.Status.CurrentTemplateResourceVersion
 	}
-
 	return generationChanged || templateChanged
 }
