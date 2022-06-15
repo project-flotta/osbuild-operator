@@ -217,9 +217,9 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 	$(KUSTOMIZE) build config/crd | $(CLUSTER_RUNTIME) delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: install-cert-manager
-install-cert-manager:
+install-cert-manager: cmctl
 	$(CLUSTER_RUNTIME) apply -f https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml
-	$(CLUSTER_RUNTIME) wait --for=condition=Ready pods --all -n cert-manager --timeout=60s
+	${CMCTL} check api --wait=5m
 
 .PHONY: deploy
 deploy: manifests kustomize install-cert-manager ## Deploy controller to the K8s cluster specified in ~/.kube/config.
@@ -245,6 +245,16 @@ ENVTEST = $(shell pwd)/bin/setup-envtest
 .PHONY: envtest
 envtest: ## Download envtest-setup locally if necessary.
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+
+CMCTL = $(shell pwd)/bin/cmctl
+OS = $(shell go env GOOS)
+ARCH = $(shell go env GOARCH)
+.PHONY: cmctl
+cmctl: ## Download cmctl locally if necessary.
+ifeq ("$(wildcard $(CMCTL))","")
+	curl -sSL -o /tmp/cmctl.tar.gz https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cmctl-${OS}-${ARCH}.tar.gz
+	tar xzf /tmp/cmctl.tar.gz -C ./bin ./cmctl
+endif
 
 # go-install-tool will 'go install' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
