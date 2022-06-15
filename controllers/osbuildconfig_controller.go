@@ -195,8 +195,17 @@ func (r *OSBuildConfigReconciler) setKickstartConfigMapOwner(ctx context.Context
 }
 
 func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig, osConfigTemplate *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate, name, namespace string) (*v1.ConfigMap, error) {
+	kickstart, err := r.getKickstart(ctx, osConfigTemplate, osBuildConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if kickstart == nil {
+		return nil, nil
+	}
+
 	cm := &v1.ConfigMap{}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, cm)
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, cm)
 	if err == nil {
 		// CM has already been created, returning it
 		return cm, nil
@@ -205,26 +214,19 @@ func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, 
 		return nil, err
 	}
 
-	kickstart, err := r.getKickstart(ctx, osConfigTemplate, osBuildConfig)
-	if err != nil {
-		return nil, err
+	cm = &v1.ConfigMap{
+		ObjectMeta: ctrl.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			"kickstart": *kickstart,
+		},
 	}
 
-	if kickstart != nil {
-		cm = &v1.ConfigMap{
-			ObjectMeta: ctrl.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				"kickstart": *kickstart,
-			},
-		}
-
-		err = r.Client.Create(ctx, cm)
-		if err != nil {
-			return nil, err
-		}
+	err = r.Client.Create(ctx, cm)
+	if err != nil {
+		return nil, err
 	}
 	return cm, nil
 }
