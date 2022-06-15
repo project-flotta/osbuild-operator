@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/project-flotta/osbuild-operator/internal/customizations"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -164,7 +165,6 @@ func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuil
 func (r *OSBuildConfigReconciler) applyTemplate(ctx context.Context, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig, osBuildConfigSpecDetails *osbuilderprojectflottaiov1alpha1.BuildDetails, osBuildName string, osBuild *osbuilderprojectflottaiov1alpha1.OSBuild) (*v1.ConfigMap, *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate, error) {
 	var kickstartConfigMap *v1.ConfigMap
 	var osConfigTemplate *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate
-	buildConfigCustomizations := osBuildConfigSpecDetails.Customizations
 	if template := osBuildConfig.Spec.Template; template != nil {
 		var err error
 		osConfigTemplate, err = r.OSBuildConfigTemplateRepository.Read(ctx, template.OSBuildConfigTemplateRef, osBuildConfig.Namespace)
@@ -172,7 +172,7 @@ func (r *OSBuildConfigReconciler) applyTemplate(ctx context.Context, osBuildConf
 			return nil, nil, err
 		}
 
-		mergeCustomization(osConfigTemplate, osBuildConfigSpecDetails, buildConfigCustomizations)
+		osBuildConfigSpecDetails.Customizations = customizations.MergeCustomizations(osConfigTemplate.Spec.Customizations, osBuildConfigSpecDetails.Customizations)
 
 		kickstartConfigMap, err = r.createKickstartConfigMap(ctx, osBuildConfig, osConfigTemplate, osBuildName, osBuild.Namespace)
 		if err != nil {
@@ -229,23 +229,6 @@ func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, 
 		return nil, err
 	}
 	return cm, nil
-}
-
-func mergeCustomization(osConfigTemplate *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate, osBuildConfigSpecDetails *osbuilderprojectflottaiov1alpha1.BuildDetails, buildConfigCustomizations *osbuilderprojectflottaiov1alpha1.Customizations) {
-	if customizations := osConfigTemplate.Spec.Customizations; customizations != nil {
-		if osBuildConfigSpecDetails.Customizations != nil {
-			osBuildConfigSpecDetails.Customizations = customizations.DeepCopy()
-			if buildConfigCustomizations.Services != nil {
-				osBuildConfigSpecDetails.Customizations.Services = buildConfigCustomizations.Services
-			}
-			if buildConfigCustomizations.Packages != nil {
-				osBuildConfigSpecDetails.Customizations.Packages = buildConfigCustomizations.Packages
-			}
-			if buildConfigCustomizations.Users != nil {
-				osBuildConfigSpecDetails.Customizations.Users = buildConfigCustomizations.Users
-			}
-		}
-	}
 }
 
 func (r *OSBuildConfigReconciler) getKickstart(ctx context.Context, osConfigTemplate *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig) (*string, error) {
