@@ -19,24 +19,23 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/project-flotta/osbuild-operator/internal/customizations"
 	"time"
 
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	osbuilderv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/internal/customizations"
 	"github.com/project-flotta/osbuild-operator/internal/predicates"
+	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfigtemplate"
@@ -52,6 +51,7 @@ type OSBuildConfigReconciler struct {
 	OSBuildConfigRepository         osbuildconfig.Repository
 	OSBuildRepository               osbuild.Repository
 	OSBuildConfigTemplateRepository osbuildconfigtemplate.Repository
+	ConfigMapRepository             configmap.Repository
 }
 
 //+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -97,7 +97,7 @@ func (r *OSBuildConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
-func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig, logger logr.Logger) error {
+func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuildConfig *osbuilderv1alpha1.OSBuildConfig, logger logr.Logger) error {
 	lastVersion := osBuildConfig.Status.LastVersion
 	if lastVersion == nil {
 		lastVersion = &zero
@@ -105,12 +105,12 @@ func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuil
 	osBuildNewVersion := *lastVersion + 1
 
 	osBuildName := fmt.Sprintf("%s-%d", osBuildConfig.Name, osBuildNewVersion)
-	osBuild := &osbuilderprojectflottaiov1alpha1.OSBuild{
+	osBuild := &osbuilderv1alpha1.OSBuild{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      osBuildName,
 			Namespace: osBuildConfig.Namespace,
 		},
-		Spec: osbuilderprojectflottaiov1alpha1.OSBuildSpec{
+		Spec: osbuilderv1alpha1.OSBuildSpec{
 			TriggeredBy: "UpdateCR",
 		},
 	}
@@ -162,9 +162,9 @@ func (r *OSBuildConfigReconciler) createNewOSBuildCR(ctx context.Context, osBuil
 	return nil
 }
 
-func (r *OSBuildConfigReconciler) applyTemplate(ctx context.Context, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig, osBuildConfigSpecDetails *osbuilderprojectflottaiov1alpha1.BuildDetails, osBuildName string, osBuild *osbuilderprojectflottaiov1alpha1.OSBuild) (*v1.ConfigMap, *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate, error) {
-	var kickstartConfigMap *v1.ConfigMap
-	var osConfigTemplate *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate
+func (r *OSBuildConfigReconciler) applyTemplate(ctx context.Context, osBuildConfig *osbuilderv1alpha1.OSBuildConfig, osBuildConfigSpecDetails *osbuilderv1alpha1.BuildDetails, osBuildName string, osBuild *osbuilderv1alpha1.OSBuild) (*corev1.ConfigMap, *osbuilderv1alpha1.OSBuildConfigTemplate, error) {
+	var kickstartConfigMap *corev1.ConfigMap
+	var osConfigTemplate *osbuilderv1alpha1.OSBuildConfigTemplate
 	if template := osBuildConfig.Spec.Template; template != nil {
 		var err error
 		osConfigTemplate, err = r.OSBuildConfigTemplateRepository.Read(ctx, template.OSBuildConfigTemplateRef, osBuildConfig.Namespace)
@@ -179,22 +179,22 @@ func (r *OSBuildConfigReconciler) applyTemplate(ctx context.Context, osBuildConf
 			return nil, nil, err
 		}
 		if kickstartConfigMap != nil {
-			osBuild.Spec.Kickstart = &osbuilderprojectflottaiov1alpha1.NameRef{Name: osBuildName}
+			osBuild.Spec.Kickstart = &osbuilderv1alpha1.NameRef{Name: osBuildName}
 		}
 	}
 	return kickstartConfigMap, osConfigTemplate, nil
 }
 
-func (r *OSBuildConfigReconciler) setKickstartConfigMapOwner(ctx context.Context, kickstartConfigMap *v1.ConfigMap, osBuild *osbuilderprojectflottaiov1alpha1.OSBuild) error {
-	patch := client.MergeFrom(kickstartConfigMap)
+func (r *OSBuildConfigReconciler) setKickstartConfigMapOwner(ctx context.Context, kickstartConfigMap *corev1.ConfigMap, osBuild *osbuilderv1alpha1.OSBuild) error {
+	oldConfigMap := kickstartConfigMap.DeepCopy()
 	err := controllerutil.SetOwnerReference(osBuild, kickstartConfigMap, r.Scheme)
 	if err != nil {
 		return err
 	}
-	return r.Client.Patch(ctx, kickstartConfigMap, patch)
+	return r.ConfigMapRepository.Patch(ctx, oldConfigMap, kickstartConfigMap)
 }
 
-func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig, osConfigTemplate *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate, name, namespace string) (*v1.ConfigMap, error) {
+func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, osBuildConfig *osbuilderv1alpha1.OSBuildConfig, osConfigTemplate *osbuilderv1alpha1.OSBuildConfigTemplate, name, namespace string) (*corev1.ConfigMap, error) {
 	kickstart, err := r.getKickstart(ctx, osConfigTemplate, osBuildConfig)
 	if err != nil {
 		return nil, err
@@ -204,8 +204,7 @@ func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, 
 		return nil, nil
 	}
 
-	cm := &v1.ConfigMap{}
-	err = r.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, cm)
+	cm, err := r.ConfigMapRepository.Read(ctx, name, namespace)
 	if err == nil {
 		// CM has already been created, returning it
 		return cm, nil
@@ -214,7 +213,7 @@ func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, 
 		return nil, err
 	}
 
-	cm = &v1.ConfigMap{
+	cm = &corev1.ConfigMap{
 		ObjectMeta: ctrl.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -224,14 +223,14 @@ func (r *OSBuildConfigReconciler) createKickstartConfigMap(ctx context.Context, 
 		},
 	}
 
-	err = r.Client.Create(ctx, cm)
+	err = r.ConfigMapRepository.Create(ctx, cm)
 	if err != nil {
 		return nil, err
 	}
 	return cm, nil
 }
 
-func (r *OSBuildConfigReconciler) getKickstart(ctx context.Context, osConfigTemplate *osbuilderprojectflottaiov1alpha1.OSBuildConfigTemplate, osBuildConfig *osbuilderprojectflottaiov1alpha1.OSBuildConfig) (*string, error) {
+func (r *OSBuildConfigReconciler) getKickstart(ctx context.Context, osConfigTemplate *osbuilderv1alpha1.OSBuildConfigTemplate, osBuildConfig *osbuilderv1alpha1.OSBuildConfig) (*string, error) {
 	if osConfigTemplate.Spec.Iso == nil || osConfigTemplate.Spec.Iso.Kickstart == nil {
 		return nil, nil
 	}
@@ -243,8 +242,7 @@ func (r *OSBuildConfigReconciler) getKickstart(ctx context.Context, osConfigTemp
 	if osConfigTemplate.Spec.Iso.Kickstart.Raw != nil {
 		kickstartTemplate = *osConfigTemplate.Spec.Iso.Kickstart.Raw
 	} else {
-		cm := v1.ConfigMap{}
-		err := r.Client.Get(ctx, types.NamespacedName{Name: *osConfigTemplate.Spec.Iso.Kickstart.ConfigMapName, Namespace: osBuildConfig.Namespace}, &cm)
+		cm, err := r.ConfigMapRepository.Read(ctx, *osConfigTemplate.Spec.Iso.Kickstart.ConfigMapName, osBuildConfig.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -264,7 +262,7 @@ func (r *OSBuildConfigReconciler) getKickstart(ctx context.Context, osConfigTemp
 // SetupWithManager sets up the controller with the Manager.
 func (r *OSBuildConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&osbuilderprojectflottaiov1alpha1.OSBuildConfig{}).
+		For(&osbuilderv1alpha1.OSBuildConfig{}).
 		// Process only spec changes or when related template versions diverge
 		WithEventFilter(predicates.OSBuildConfigChangedPredicate{}).
 		Complete(r)
