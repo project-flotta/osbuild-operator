@@ -8,10 +8,6 @@ var void struct{}
 
 func MergeCustomizations(templateCustomizations, configCustomizations *v1alpha1.Customizations) *v1alpha1.Customizations {
 	var customizations *v1alpha1.Customizations
-	if configCustomizations != nil {
-		customizations = configCustomizations.DeepCopy()
-	}
-
 	if templateCustomizations != nil {
 		customizations = templateCustomizations.DeepCopy()
 		if configCustomizations != nil {
@@ -25,6 +21,8 @@ func MergeCustomizations(templateCustomizations, configCustomizations *v1alpha1.
 				customizations.Users = mergeUsers(templateCustomizations.Users, configCustomizations.Users)
 			}
 		}
+	} else {
+		customizations = configCustomizations.DeepCopy()
 	}
 	return customizations
 }
