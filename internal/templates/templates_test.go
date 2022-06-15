@@ -12,7 +12,7 @@ var _ = Describe("Templates", func() {
 	DescribeTable("should replace parameters", func(template string, expectedParameters []api.Parameter,
 		values []api.ParameterValue, expectedResult string) {
 		// when
-		result, err := templates.Process(template, expectedParameters, values)
+		result, err := templates.ProcessOSBuildConfigTemplate(template, expectedParameters, values)
 
 		// then
 		Expect(err).NotTo(HaveOccurred())
@@ -79,7 +79,7 @@ var _ = Describe("Templates", func() {
 	DescribeTable("should fail processing template", func(template string, expectedParameters []api.Parameter,
 		values []api.ParameterValue) {
 		// when
-		_, err := templates.Process(template, expectedParameters, values)
+		_, err := templates.ProcessOSBuildConfigTemplate(template, expectedParameters, values)
 
 		// then
 		Expect(err).To(HaveOccurred())
