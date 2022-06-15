@@ -9,7 +9,9 @@ import (
 	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
 )
 
-func Process(textTemplate string, expectedParameters []osbuilderprojectflottaiov1alpha1.Parameter, values []osbuilderprojectflottaiov1alpha1.ParameterValue) (string, error) {
+func ProcessOSBuildConfigTemplate(textTemplate string, expectedParameters []osbuilderprojectflottaiov1alpha1.Parameter,
+	values []osbuilderprojectflottaiov1alpha1.ParameterValue) (string, error) {
+
 	keyTypes := make(map[string]string)
 	keyValues := make(map[string]string)
 

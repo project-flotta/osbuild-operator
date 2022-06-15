@@ -271,7 +271,7 @@ func (r *OSBuildConfigReconciler) getKickstart(ctx context.Context, osConfigTemp
 		}
 	}
 
-	finalKickstart, err := templates.Process(kickstartTemplate, osConfigTemplate.Spec.Parameters, osBuildConfig.Spec.Template.Parameters)
+	finalKickstart, err := templates.ProcessOSBuildConfigTemplate(kickstartTemplate, osConfigTemplate.Spec.Parameters, osBuildConfig.Spec.Template.Parameters)
 	if err != nil {
 		return nil, err
 	}
