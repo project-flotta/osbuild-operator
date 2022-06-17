@@ -29,5 +29,9 @@ func (OSBuildConfigChangedPredicate) Update(e event.UpdateEvent) bool {
 	if newConfig.Status.LastTemplateResourceVersion != nil && newConfig.Status.CurrentTemplateResourceVersion != nil {
 		templateChanged = *newConfig.Status.LastTemplateResourceVersion != *newConfig.Status.CurrentTemplateResourceVersion
 	}
+
+	templateTriggerEnabled := newConfig.Spec.Triggers.TemplateConfigChange == nil || *newConfig.Spec.Triggers.TemplateConfigChange
+	templateChanged = templateChanged && templateTriggerEnabled
+
 	return generationChanged || templateChanged
 }

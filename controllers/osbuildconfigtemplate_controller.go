@@ -19,21 +19,24 @@ package controllers
 import (
 	"context"
 
-	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfigtemplate"
 )
 
 // OSBuildConfigTemplateReconciler reconciles a OSBuildConfigTemplate object
 type OSBuildConfigTemplateReconciler struct {
 	client.Client
-	Scheme                  *runtime.Scheme
-	OSBuildConfigRepository osbuildconfig.Repository
+	Scheme                          *runtime.Scheme
+	OSBuildConfigRepository         osbuildconfig.Repository
+	OSBuildConfigTemplateRepository osbuildconfigtemplate.Repository
 }
 
 //+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildconfigtemplates,verbs=get;list;watch;create;update;patch;delete
@@ -52,27 +55,57 @@ type OSBuildConfigTemplateReconciler struct {
 func (r *OSBuildConfigTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling", "OSBuildConfigTemplate", req)
+	template, err := r.OSBuildConfigTemplateRepository.Read(ctx, req.Name, req.Namespace)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		logger.Error(err, "Cannot get template")
+		return ctrl.Result{}, err
+	}
+
+	if template.DeletionTimestamp != nil {
+		return ctrl.Result{}, nil
+	}
 
 	configs, err := r.OSBuildConfigRepository.ListByOSBuildConfigTemplate(ctx, req.Name, req.Namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			logger.Info("no configs found")
 			return ctrl.Result{}, nil
 		}
 		logger.Error(err, "Cannot get configs by template")
 		return ctrl.Result{}, err
 	}
-	var names []string
-	for _, config := range configs {
-		names = append(names, config.Name)
+
+	for i := range configs {
+		config := configs[i]
+		err := r.patchOSBuildConfig(ctx, &config, template)
+		if err != nil {
+			logger.Error(err, "cannot patch OSBuildConfig status with current template version",
+				"OSBuildConfig", config.Name, "Namespace", config.Namespace)
+			return ctrl.Result{}, err
+		}
 	}
-	logger.Info("Found OSBuildConfigs for OSBuildConfigTemplate", "configs", names, "template", req.Name)
 
 	return ctrl.Result{}, nil
+}
+
+func (r *OSBuildConfigTemplateReconciler) patchOSBuildConfig(ctx context.Context, config *v1alpha1.OSBuildConfig, template *v1alpha1.OSBuildConfigTemplate) error {
+	if config.Status.CurrentTemplateResourceVersion == nil ||
+		*config.Status.CurrentTemplateResourceVersion == template.ResourceVersion {
+		return nil
+	}
+
+	patch := client.MergeFrom(config.DeepCopy())
+	config.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
+	return r.OSBuildConfigRepository.PatchStatus(ctx, config, &patch)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OSBuildConfigTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.OSBuildConfigTemplate{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
