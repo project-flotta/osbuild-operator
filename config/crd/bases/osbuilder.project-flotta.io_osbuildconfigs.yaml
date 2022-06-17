@@ -164,6 +164,11 @@ spec:
                     description: ConfigChange if True trigger a new build upon any
                       change in this BuildConfig CR (optional)
                     type: boolean
+                  templateConfigChange:
+                    description: 'TemplateConfigChange if True trigger a new build
+                      upon any change to associated BuildConfigTemplate CR (optional).
+                      Default: True.'
+                    type: boolean
                   webHook:
                     description: WebHook defines the way to trigger a build using
                       a REST call (optional)

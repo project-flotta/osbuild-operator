@@ -120,6 +120,9 @@ type BuildTriggers struct {
 	ConfigChange *bool `json:"configChange,omitempty"`
 	// WebHook defines the way to trigger a build using a REST call (optional)
 	WebHook *buildv1.WebHookTrigger `json:"webHook,omitempty"`
+	// TemplateConfigChange if True trigger a new build upon any change to associated BuildConfigTemplate CR (optional).
+	// Default: True.
+	TemplateConfigChange *bool `json:"templateConfigChange,omitempty"`
 }
 
 // OSBuildConfigStatus defines the observed state of OSBuildConfig
