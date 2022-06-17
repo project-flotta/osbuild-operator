@@ -141,9 +141,10 @@ func main() {
 		}
 	}
 	if err = (&controllers.OSBuildConfigTemplateReconciler{
-		Client:                  mgr.GetClient(),
-		Scheme:                  mgr.GetScheme(),
-		OSBuildConfigRepository: osBuildConfigRepository,
+		Client:                          mgr.GetClient(),
+		Scheme:                          mgr.GetScheme(),
+		OSBuildConfigRepository:         osBuildConfigRepository,
+		OSBuildConfigTemplateRepository: osBuildConfigTemplateRepository,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildConfigTemplate")
 		os.Exit(1)
