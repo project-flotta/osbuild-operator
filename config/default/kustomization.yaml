@@ -72,3 +72,9 @@ vars:
     kind: Service
     version: v1
     name: webhook-service
+- name: CA_ISSUER_NAME
+  objref:
+    kind: Issuer
+    group: cert-manager.io
+    version: v1
+    name: osbuild-ca-issuer

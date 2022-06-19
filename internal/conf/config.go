@@ -1,8 +1,6 @@
 package conf
 
 import (
-	"fmt"
-
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -26,30 +24,20 @@ type OperatorConfig struct {
 	LeaderElectionResourceName string `envconfig:"LEADER_ELECTION_RESOURCE_NAME" default:"bfdcaedc.osbuilder.project-flotta.io"`
 
 	// WorkingNamespace must be set to the operator's namespace
-	WorkingNamespace string `envconfig:"WORKING_NAMESPACE" default:""`
+	WorkingNamespace string `envconfig:"WORKING_NAMESPACE" required:"true"`
 
 	// Verbosity of the logger.
 	LogLevel string `envconfig:"LOG_LEVEL" default:"info"`
+
+	// CAIssuerName is the name of the cert-manager issuer in the operator's namespace used for the environment setup
+	CAIssuerName string `envconfig:"CA_ISSUER_NAME" required:"true"`
 }
 
 var GlobalConf *OperatorConfig
 
-func (oc *OperatorConfig) validate() error {
-	// Ensure that WorkingNamespace is set. We don't default it to anything.
-	// It must be passed in, typically by the operator's own pod spec.
-	if oc.WorkingNamespace == "" {
-		return fmt.Errorf("WorkingNamespace value [%s] invalid", oc.WorkingNamespace)
-	}
-	return nil
-}
-
 func Load() error {
 	var c OperatorConfig
 	err := envconfig.Process("", &c)
-	if err != nil {
-		return err
-	}
-	err = c.validate()
 	if err != nil {
 		return err
 	}
