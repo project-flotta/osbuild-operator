@@ -1,5 +1,7 @@
 resources:
 - certificate.yaml
+- ca_certificate.yaml
+- operator_certificate.yaml
 
 configurations:
 - kustomizeconfig.yaml

@@ -59,8 +59,20 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: CA_ISSUER_NAME
+          # CA_ISSUER_NAME will be substituted by kustomize.
+          value: $(CA_ISSUER_NAME)
         envFrom:
         - configMapRef:
             name: manager-config
+        volumeMounts:
+        - mountPath: /etc/osbuild/certs
+          name: operator-cert
+          readOnly: true
+      volumes:
+      - name: operator-cert
+        secret:
+          defaultMode: 420
+          secretName: operator-cert
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

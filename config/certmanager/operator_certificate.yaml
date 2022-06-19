@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: operator-cert
+  namespace: system
+spec:
+  secretName: operator-cert
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  dnsNames:
+    - "osbuild-operator"
+  issuerRef:
+    name: osbuild-ca-issuer
+    kind: Issuer
+    group: cert-manager.io
+  duration: 87600h # Until we handle rotation, we're setting duration to 10 years
