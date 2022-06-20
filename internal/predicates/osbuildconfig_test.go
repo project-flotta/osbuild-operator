@@ -15,6 +15,9 @@ import (
 var (
 	version1 = "1"
 	version2 = "2"
+
+	AFalse = false
+	ATrue  = true
 )
 
 var _ = Describe("OSBuildConfig reconciliation predicate", func() {
@@ -43,6 +46,53 @@ var _ = Describe("OSBuildConfig reconciliation predicate", func() {
 			},
 			&v1alpha1.OSBuildConfig{
 				ObjectMeta: v1.ObjectMeta{Generation: 1},
+				Status: v1alpha1.OSBuildConfigStatus{
+					LastTemplateResourceVersion:    &version1,
+					CurrentTemplateResourceVersion: &version2,
+				},
+			},
+		),
+		Entry("when template version changed and template trigger is explicitly enabled",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						TemplateConfigChange: &ATrue,
+					},
+				},
+				Status: v1alpha1.OSBuildConfigStatus{
+					LastTemplateResourceVersion:    &version1,
+					CurrentTemplateResourceVersion: &version2,
+				},
+			},
+		),
+		Entry("when generation changed and config trigger is explicitly enabled",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 2},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						ConfigChange: &ATrue,
+					},
+				},
+			},
+		),
+		Entry("when template version changed, and config trigger is disabled (no influence)",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						ConfigChange: &AFalse,
+					},
+				},
 				Status: v1alpha1.OSBuildConfigStatus{
 					LastTemplateResourceVersion:    &version1,
 					CurrentTemplateResourceVersion: &version2,
@@ -109,6 +159,36 @@ var _ = Describe("OSBuildConfig reconciliation predicate", func() {
 				ObjectMeta: v1.ObjectMeta{Generation: 1},
 			},
 			&v1alpha1.OSBuild{},
+		),
+		Entry("when template version changed, but template trigger is disabled",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						TemplateConfigChange: &AFalse,
+					},
+				},
+				Status: v1alpha1.OSBuildConfigStatus{
+					LastTemplateResourceVersion:    &version1,
+					CurrentTemplateResourceVersion: &version2,
+				},
+			},
+		),
+		Entry("when generation changed, but config trigger is disabled",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 2},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						ConfigChange: &AFalse,
+					},
+				},
+			},
 		),
 	)
 
