@@ -9,7 +9,7 @@ require (
 	github.com/onsi/gomega v1.19.0
 	github.com/u-root/u-root v0.8.0
 	github.com/urfave/cli/v2 v2.10.1
-	k8s.io/apimachinery v0.24.1
+	k8s.io/apimachinery v0.24.2
 	k8s.io/client-go v0.24.1
 	sigs.k8s.io/controller-runtime v0.12.1
 )
