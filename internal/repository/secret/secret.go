@@ -11,6 +11,7 @@ import (
 type Repository interface {
 	Read(ctx context.Context, name string, namespace string) (*corev1.Secret, error)
 	Create(ctx context.Context, secret *corev1.Secret) error
+	Delete(ctx context.Context, secret *corev1.Secret) error
 }
 
 type CRRepository struct {
@@ -29,4 +30,8 @@ func (r *CRRepository) Read(ctx context.Context, name string, namespace string) 
 
 func (r *CRRepository) Create(ctx context.Context, secret *corev1.Secret) error {
 	return r.client.Create(ctx, secret)
+}
+
+func (r *CRRepository) Delete(ctx context.Context, secret *corev1.Secret) error {
+	return r.client.Delete(ctx, secret)
 }

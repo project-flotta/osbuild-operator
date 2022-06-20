@@ -32,15 +32,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+
 	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"github.com/project-flotta/osbuild-operator/controllers"
 	"github.com/project-flotta/osbuild-operator/internal/conf"
 	"github.com/project-flotta/osbuild-operator/internal/indexer"
 	"github.com/project-flotta/osbuild-operator/internal/manifests"
+	"github.com/project-flotta/osbuild-operator/internal/repository/certificate"
 	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
+	"github.com/project-flotta/osbuild-operator/internal/repository/deployment"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfigtemplate"
+	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildenvconfig"
+	"github.com/project-flotta/osbuild-operator/internal/repository/secret"
+	"github.com/project-flotta/osbuild-operator/internal/repository/service"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -53,6 +60,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+
+	utilruntime.Must(certmanagerv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -96,10 +105,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	osBuildEnvConfigRepository := osbuildenvconfig.NewOSBuildEnvConfigRepository(mgr.GetClient())
 	osBuildConfigRepository := osbuildconfig.NewOSBuildConfigRepository(mgr.GetClient())
 	osBuildRepository := osbuild.NewOSBuildRepository(mgr.GetClient())
 	osBuildConfigTemplateRepository := osbuildconfigtemplate.NewOSBuildConfigTemplateRepository(mgr.GetClient())
 	configMapRepository := configmap.NewConfigMapRepository(mgr.GetClient())
+	certificateRepository := certificate.NewCertificateRepository(mgr.GetClient())
+	deploymentRepository := deployment.NewDeploymentRepository(mgr.GetClient())
+	serviceRepository := service.NewServiceRepository(mgr.GetClient())
+	secretRepository := secret.NewSecretRepository(mgr.GetClient())
+
 	osBuildCRCreator := manifests.NewOSBuildCRCreator(osBuildConfigRepository, osBuildRepository, scheme, osBuildConfigTemplateRepository, configMapRepository)
 
 	if err = (&controllers.OSBuildConfigReconciler{
@@ -127,8 +142,13 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.OSBuildEnvConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Scheme:                     mgr.GetScheme(),
+		OSBuildEnvConfigRepository: osBuildEnvConfigRepository,
+		CertificateRepository:      certificateRepository,
+		ConfigMapRepository:        configMapRepository,
+		DeploymentRepository:       deploymentRepository,
+		ServiceRepository:          serviceRepository,
+		SecretRepository:           secretRepository,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildEnvConfig")
 		os.Exit(1)

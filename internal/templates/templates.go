@@ -1,12 +1,18 @@
 package templates
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"path"
 	"strconv"
 	"text/template"
 
 	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+)
+
+var (
+	templatesDirectory = "/templates"
 )
 
 func ProcessOSBuildConfigTemplate(textTemplate string, expectedParameters []osbuilderprojectflottaiov1alpha1.Parameter,
@@ -53,4 +59,24 @@ func validateParameter(value, pType string) bool {
 		// That's a string
 		return true
 	}
+}
+
+func LoadFromTemplateFile(templateFilename string, params interface{}) (*bytes.Buffer, error) {
+	configurationTemplate, err := template.ParseFiles(path.Join(templatesDirectory, templateFilename))
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	bufWriter := bufio.NewWriter(&buf)
+	err = configurationTemplate.Execute(bufWriter, params)
+	if err != nil {
+		return nil, err
+	}
+	err = bufWriter.Flush()
+	if err != nil {
+		return nil, err
+	}
+
+	return &buf, nil
 }

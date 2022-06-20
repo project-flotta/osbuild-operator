@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	buildv1 "github.com/openshift/api/build/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -32,6 +33,9 @@ var _ = Describe("OSBuildEnvConfig Webhook", func() {
 				Name: osbuildEnvConfigName,
 			},
 			Spec: OSBuildEnvConfigSpec{
+				RedHatCredsSecretReference: buildv1.SecretLocalReference{
+					Name: "OriginalName",
+				},
 				Workers: []WorkerConfig{
 					{
 						Name: "worker-1",
@@ -114,9 +118,21 @@ var _ = Describe("OSBuildEnvConfig Webhook", func() {
 	})
 
 	Context("Test update validation", func() {
-		It("Should not allow updating", func() {
+		It("Should allow updating the finalizers", func() {
+			// given
+			updatedCR := osbuildEnvConfig.DeepCopy()
+			updatedCR.ObjectMeta.Finalizers = []string{"osbuild"}
 			// when
-			err := osbuildEnvConfig.ValidateUpdate(&osbuildEnvConfig)
+			err := updatedCR.ValidateUpdate(&osbuildEnvConfig)
+			// then
+			Expect(err).To(BeNil())
+		})
+		It("Should not allow updating the spec", func() {
+			// given
+			updatedCR := osbuildEnvConfig.DeepCopy()
+			updatedCR.Spec.RedHatCredsSecretReference.Name = "UpdatedName"
+			// when
+			err := updatedCR.ValidateUpdate(&osbuildEnvConfig)
 			// then
 			Expect(err).To(Equal(updateNotSupported))
 		})
