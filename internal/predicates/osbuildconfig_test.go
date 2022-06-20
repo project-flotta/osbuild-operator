@@ -69,6 +69,36 @@ var _ = Describe("OSBuildConfig reconciliation predicate", func() {
 				},
 			},
 		),
+		Entry("when generation changed and config trigger is explicitly enabled",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 2},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						ConfigChange: &ATrue,
+					},
+				},
+			},
+		),
+		Entry("when template version changed, and config trigger is disabled (no influence)",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						ConfigChange: &AFalse,
+					},
+				},
+				Status: v1alpha1.OSBuildConfigStatus{
+					LastTemplateResourceVersion:    &version1,
+					CurrentTemplateResourceVersion: &version2,
+				},
+			},
+		),
 	)
 
 	DescribeTable("should not reconcile update", func(old, new runtimeclient.Object) {
@@ -144,6 +174,19 @@ var _ = Describe("OSBuildConfig reconciliation predicate", func() {
 				Status: v1alpha1.OSBuildConfigStatus{
 					LastTemplateResourceVersion:    &version1,
 					CurrentTemplateResourceVersion: &version2,
+				},
+			},
+		),
+		Entry("when generation changed, but config trigger is disabled",
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 1},
+			},
+			&v1alpha1.OSBuildConfig{
+				ObjectMeta: v1.ObjectMeta{Generation: 2},
+				Spec: v1alpha1.OSBuildConfigSpec{
+					Triggers: v1alpha1.BuildTriggers{
+						ConfigChange: &AFalse,
+					},
 				},
 			},
 		),
