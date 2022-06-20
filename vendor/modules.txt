@@ -251,7 +251,7 @@ github.com/spf13/pflag
 # github.com/u-root/u-root v0.8.0
 ## explicit; go 1.17
 github.com/u-root/u-root/pkg/shlex
-# github.com/urfave/cli/v2 v2.8.1
+# github.com/urfave/cli/v2 v2.10.1
 ## explicit; go 1.18
 github.com/urfave/cli/v2
 # github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673
@@ -383,7 +383,7 @@ gopkg.in/inf.v0
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2
-# gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+# gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
 # k8s.io/api v0.24.1
