@@ -3,6 +3,7 @@ module github.com/project-flotta/osbuild-operator
 go 1.17
 
 require (
+	github.com/cert-manager/cert-manager v1.8.1
 	github.com/kdomanski/iso9660 v0.3.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/onsi/ginkgo/v2 v2.1.4
@@ -15,15 +16,20 @@ require (
 )
 
 require (
+	github.com/golang-jwt/jwt/v4 v4.0.0 // indirect
+	sigs.k8s.io/gateway-api v0.4.1 // indirect
+)
+
+require (
 	github.com/aws/aws-sdk-go v1.44.39
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )
 
 require (
-	cloud.google.com/go v0.81.0 // indirect
+	cloud.google.com/go v0.99.0 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
-	github.com/Azure/go-autorest/autorest v0.11.18 // indirect
-	github.com/Azure/go-autorest/autorest/adal v0.9.13 // indirect
+	github.com/Azure/go-autorest/autorest v0.11.20 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.9.15 // indirect
 	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
@@ -36,7 +42,6 @@ require (
 	github.com/deepmap/oapi-codegen v1.11.0
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
-	github.com/form3tech-oss/jwt-go v3.2.3+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-logr/zapr v1.2.0 // indirect
@@ -48,8 +53,8 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.5 // indirect
-	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/google/go-cmp v0.5.6 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -95,4 +100,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-require github.com/go-logr/logr v1.2.3 // indirect
+require github.com/go-logr/logr v1.2.3

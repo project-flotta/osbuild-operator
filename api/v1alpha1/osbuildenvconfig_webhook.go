@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,7 +44,10 @@ var (
 		error: "worker names must be unique",
 	}
 	updateNotSupported = osBuildEnvConfigError{
-		error: "OSBuildEnvConfig cannot be updated",
+		error: "updating the Spec of the OSBuildEnvConfig is not supported",
+	}
+	generalWebhookFailure = osBuildEnvConfigError{
+		error: "webhook check encountered an error",
 	}
 )
 
@@ -123,8 +127,16 @@ func validateUniqueWorkerNames(workers []WorkerConfig) error {
 func (r *OSBuildEnvConfig) ValidateUpdate(old runtime.Object) error {
 	osbuildenvconfiglog.Info("validate update", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object update.
-	return updateNotSupported
+	oldEnvConfig, ok := old.(*OSBuildEnvConfig)
+	if !ok {
+		return generalWebhookFailure
+	}
+
+	if !reflect.DeepEqual(r.Spec, oldEnvConfig.Spec) {
+		return updateNotSupported
+	}
+
+	return nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

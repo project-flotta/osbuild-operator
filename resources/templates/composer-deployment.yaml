@@ -1,0 +1,178 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: osbuild-composer
+  name: {{ .ComposerDeploymentName }}
+  namespace: {{ .ComposerDeploymentNamespace }}
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: osbuild-composer
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: osbuild-composer
+    spec:
+      containers:
+      - name: composer
+        image: "{{ .ComposerImageName }}:{{ .ComposerImageTag }}"
+        command:
+        - "python3"
+        - "/opt/entrypoint.py"
+        - "--remote-worker-api"
+        - "--composer-api"
+        - "--composer-api-port"
+        - "{{ .ComposerAPIInternalPort }}"
+        - --composer-api-bind-address
+        - "::1"
+        - "--remote-worker-api-port"
+        - "{{ .WorkerAPIInternalPort }}"
+        - --remote-worker-api-bind-address
+        - "::1"
+        volumeMounts:
+        - mountPath: /var/lib/osbuild-composer
+          name: state-directory
+        - mountPath: /var/cache/osbuild-composer
+          name: cache-directory
+        - mountPath: /etc/osbuild-composer
+          name: composer-config
+        ports:
+        - containerPort: {{ .ComposerAPIInternalPort }}
+          name: composer-api
+          protocol: TCP
+        - containerPort: {{ .WorkerAPIInternalPort }}
+          name: worker-api
+          protocol: TCP
+        env:
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              key: host
+              name: {{ .PGSQLSecretName }}
+        - name: PGPORT
+          valueFrom:
+            secretKeyRef:
+              key: port
+              name: {{ .PGSQLSecretName }}
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              key: name
+              name: {{ .PGSQLSecretName }}
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: user
+              name: {{ .PGSQLSecretName }}
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: {{ .PGSQLSecretName }}
+        - name: PGSSLMODE
+          value: {{ .PgSSLMode }}
+        - name: PGMAXCONNS
+          value: "20"
+        livenessProbe:
+          exec:
+            command:
+            - cat
+            - /tmp/osbuild-composer-live
+          failureThreshold: 3
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          exec:
+            command:
+            - cat
+            - /tmp/osbuild-composer-live
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+      - image: "{{ .ProxyImageName }}:{{ .ProxyImageTag }}"
+        name: proxy
+        ports:
+        - containerPort: {{ .ComposerAPIExternalPort }}
+          name: composer-api
+          protocol: TCP
+        - containerPort: {{ .WorkerAPIExternalPort }}
+          name: worker-api
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          tcpSocket:
+            port: composer-api
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: {{ .ProxyCertsDir }}
+          name: composer-secrets
+        - mountPath: /etc/envoy
+          name: proxy-config
+      initContainers:
+      - command:
+        - /opt/migrate/tern
+        - migrate
+        - -m
+        - /opt/migrate/schemas
+        env:
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              key: host
+              name: {{ .PGSQLSecretName }}
+        - name: PGPORT
+          valueFrom:
+            secretKeyRef:
+              key: port
+              name: {{ .PGSQLSecretName }}
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              key: name
+              name: {{ .PGSQLSecretName }}
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: user
+              name: {{ .PGSQLSecretName }}
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: {{ .PGSQLSecretName }}
+        - name: PGSSLMODE
+          value: {{ .PgSSLMode }}
+        image: "{{ .ComposerImageName }}:{{ .ComposerImageTag }}"
+        name: composer-migrate
+      volumes:
+      - name: composer-config
+        configMap:
+          name: {{ .ComposerConfigMapName }}
+      - name: composer-secrets
+        secret:
+          secretName: {{ .ComposerCertsSecretName }}
+      - name: proxy-config
+        configMap:
+          name: {{ .ProxyConfigMapName }}
+      - emptyDir: {}
+        name: state-directory
+      - emptyDir: {}
+        name: cache-directory

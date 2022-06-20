@@ -1,0 +1,10 @@
+[koji]
+log_level = "{{ .Koji.LogLevel }}"
+enable_tls = false
+[worker]
+log_level = "{{ .Worker.LogLevel }}"
+request_job_timeout = "{{ .Worker.RequestJobTimeout }}"
+# base_path = "/api/image-builder-worker/v1"
+base_path = "{{ .Worker.BasePath }}"
+enable_artifacts = false
+enable_tls = false
