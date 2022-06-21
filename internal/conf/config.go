@@ -31,6 +31,9 @@ type OperatorConfig struct {
 
 	// CAIssuerName is the name of the cert-manager issuer in the operator's namespace used for the environment setup
 	CAIssuerName string `envconfig:"CA_ISSUER_NAME" required:"true"`
+
+	// TemplatesDir is the path to the directory where the templates are stored
+	TemplatesDir string `envconfig:"TEMPLATES_DIR" default:"/templates"`
 }
 
 var GlobalConf *OperatorConfig

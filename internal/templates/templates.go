@@ -9,10 +9,7 @@ import (
 	"text/template"
 
 	osbuilderprojectflottaiov1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
-)
-
-var (
-	templatesDirectory = "/templates"
+	"github.com/project-flotta/osbuild-operator/internal/conf"
 )
 
 func ProcessOSBuildConfigTemplate(textTemplate string, expectedParameters []osbuilderprojectflottaiov1alpha1.Parameter,
@@ -62,7 +59,7 @@ func validateParameter(value, pType string) bool {
 }
 
 func LoadFromTemplateFile(templateFilename string, params interface{}) (*bytes.Buffer, error) {
-	configurationTemplate, err := template.ParseFiles(path.Join(templatesDirectory, templateFilename))
+	configurationTemplate, err := template.ParseFiles(path.Join(conf.GlobalConf.TemplatesDir, templateFilename))
 	if err != nil {
 		return nil, err
 	}
