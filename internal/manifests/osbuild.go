@@ -42,7 +42,7 @@ var zero int
 func NewOSBuildCRCreator(osBuildConfigRepository repositoryosbuildconfig.Repository,
 	osBuildRepository repositoryosbuild.Repository, scheme *runtime.Scheme,
 	osBuildConfigTemplateRepository osbuildconfigtemplate.Repository,
-	configMapRepository configmap.Repository) OSBuildCRCreator {
+	configMapRepository configmap.Repository) *OSBuildCreator {
 	return &OSBuildCreator{
 		Scheme:                          scheme,
 		OSBuildRepository:               osBuildRepository,
