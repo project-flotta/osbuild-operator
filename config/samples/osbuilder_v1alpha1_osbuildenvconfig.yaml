@@ -9,7 +9,7 @@ spec:
         name: composer-db
       sslMode: disable
   workers:
-  - name: worker-1
+  - name: builder-1
     vmWorkerConfig:
       architecture: x86_64
       imageURL: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.5-x86_64-kvm.qcow2"
@@ -19,6 +19,8 @@ spec:
     genericS3ServiceConfig:
       credsSecretReference:
         name: osbuild-s3-credentials
+      caBundleSecretReference:
+        name: osbuild-s3-ca-bundle
       region: us-east-1
       bucket: osbuild-images
       endpoint: "http://minio:9000"

@@ -34,6 +34,30 @@ type OperatorConfig struct {
 
 	// TemplatesDir is the path to the directory where the templates are stored
 	TemplatesDir string `envconfig:"TEMPLATES_DIR" default:"/templates"`
+
+	// WorkerSetupImageName is the name of the image to use for the Worker Setup job
+	WorkerSetupImageName string `envconfig:"WORKER_SETUP_IMAGE_NAME" default:"quay.io/project-flotta/osbuild-operator-worker-setup"`
+
+	// WorkerSetupImageTag is the tag of the image to use for the Worker Setup job
+	WorkerSetupImageTag string `envconfig:"WORKER_SETUP_IMAGE_TAG" default:"v0.1"`
+
+	// ComposerImageName is the name of the image to use for the Composer API
+	ComposerImageName string `envconfig:"COMPOSER_IMAGE_NAME" default:"quay.io/app-sre/composer"`
+
+	// ComposerImageTag is the tag of the image to use for the Composer API
+	ComposerImageTag string `envconfig:"COMPOSER_IMAGE_TAG" default:"37fc807"`
+
+	// EnvoyProxyImageName is the name of the image to use for the Composer's Proxy server
+	EnvoyProxyImageName string `envconfig:"ENVOY_PROXY_IMAGE_NAME" default:"docker.io/envoyproxy/envoy"`
+
+	// EnvoyProxyImageTag is the tag of the image to use for the Composer API
+	EnvoyProxyImageTag string `envconfig:"ENVOY_PROXY_IMAGE_TAG" default:"v1.21-latest"`
+
+	// WorkerOSBuildComposerVersion is the release tag of OSBuild-Composer for the osbuild-worker RPM
+	WorkerOSBuildComposerVersion string `envconfig:"WORKER_OSBUILD_COMPOSER_VERSION" default:"v56"`
+
+	// WorkerOSBuildVersion is the release tag of OSBuild for the osbuild RPM
+	WorkerOSBuildVersion string `envconfig:"WORKER_OSBUILD_VERSION" default:"v59"`
 }
 
 var GlobalConf *OperatorConfig

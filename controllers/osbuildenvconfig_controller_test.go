@@ -47,6 +47,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		osBuildOperatorFinalizer = "osbuilder.project-flotta.io/osBuildOperatorFinalizer"
 		composerCertificateName  = "composer-cert"
 		templatesDir             = "../resources/templates"
+		workerSetupImageName     = "quay.io/project-flotta/osbuild-operator-worker-setup:latest"
+
+		genericS3CredsSecretName    = "genericS3CredsSecretName" // #nosec G101
+		genericS3Region             = "us-east-1"
+		genericS3Bucket             = "test-bucket"
+		genericS3Endpoint           = "https://somewhere"
+		genericS3CABundleSecretName = "genericS3CABundleSecretName" // #nosec G101
 	)
 
 	var (
@@ -90,6 +97,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		os.Setenv("WORKING_NAMESPACE", operatorNamespace)
 		os.Setenv("CA_ISSUER_NAME", caIssuerName)
 		os.Setenv("TEMPLATES_DIR", templatesDir)
+		os.Setenv("WORKER_SETUP_IMAGE", workerSetupImageName)
 		err := conf.Load()
 		Expect(err).To(BeNil())
 
@@ -135,6 +143,22 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			},
 			Spec: osbuildv1alpha1.OSBuildEnvConfigSpec{
 				Composer: &osbuildv1alpha1.ComposerConfig{},
+				S3Service: osbuildv1alpha1.S3ServiceConfig{
+					GenericS3: &osbuildv1alpha1.GenericS3ServiceConfig{
+						AWSS3ServiceConfig: &osbuildv1alpha1.AWSS3ServiceConfig{
+							CredsSecretReference: buildv1.SecretLocalReference{
+								Name: genericS3CredsSecretName,
+							},
+							Region: genericS3Region,
+							Bucket: genericS3Bucket,
+						},
+						Endpoint: genericS3Endpoint,
+						CABundleSecretReference: &buildv1.SecretLocalReference{
+							Name: genericS3CABundleSecretName,
+						},
+						SkipSSLVerification: pointer.Bool(true),
+					},
+				},
 			},
 		}
 	})
@@ -716,17 +740,182 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										})
 									})
 
-									Context("Composer API Service exists", func() {
+									Context("Worker API Service exists", func() {
+										const (
+											workerConfigAnsibleConfigConfigMapName = "osbuild-worker-setup-ansible-config"
+										)
+
 										BeforeEach(func() {
 											serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(&composerWorkerAPIService, nil)
 										})
 
-										It("Should return Done", func() {
+										It("Should return an error if failed to get the configMap for the ansible config ", func() {
+											// given
+											configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
 											// when
 											result, err := reconciler.Reconcile(requestContext, request)
 											// then
-											Expect(err).To(BeNil())
-											Expect(result).To(Equal(resultDone))
+											Expect(err).To(Equal(errFailed))
+											Expect(result).To(Equal(resultRequeue))
+										})
+
+										Context("ConfigMap for configuration ansible config not found", func() {
+											BeforeEach(func() {
+												configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
+											})
+
+											It("Should return an error if failed to create the configMap for the ansible config for the worker configuration job", func() {
+												// given
+												configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+												// when
+												result, err := reconciler.Reconcile(requestContext, request)
+												// then
+												Expect(err).To(Equal(errFailed))
+												Expect(result).To(Equal(resultRequeue))
+											})
+
+											It("Should return requeue if succeeded to create the configMap for the ansible config for the worker configuration job", func() {
+												// given
+												configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+												// when
+												result, err := reconciler.Reconcile(requestContext, request)
+												// then
+												Expect(err).To(BeNil())
+												Expect(result).To(Equal(resultRequeue))
+											})
+										})
+
+										Context("ConfigMap for the ansible config exists", func() {
+											const (
+												workerConfigPlaybookConfigMapName = "osbuild-worker-setup-playbook"
+											)
+
+											var (
+												workerConfigAnsibleConfigConfigMap = corev1.ConfigMap{
+													ObjectMeta: metav1.ObjectMeta{
+														Namespace: operatorNamespace,
+														Name:      workerConfigAnsibleConfigConfigMapName,
+													},
+												}
+											)
+
+											BeforeEach(func() {
+												configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(&workerConfigAnsibleConfigConfigMap, nil)
+											})
+
+											It("Should return an error if failed to get the configMap for the ansible config ", func() {
+												// given
+												configMapRepository.EXPECT().Read(requestContext, workerConfigPlaybookConfigMapName, operatorNamespace).Return(nil, errFailed)
+												// when
+												result, err := reconciler.Reconcile(requestContext, request)
+												// then
+												Expect(err).To(Equal(errFailed))
+												Expect(result).To(Equal(resultRequeue))
+											})
+
+											Context("ConfigMap for configuration playbook not found", func() {
+												BeforeEach(func() {
+													configMapRepository.EXPECT().Read(requestContext, workerConfigPlaybookConfigMapName, operatorNamespace).Return(nil, errNotFound)
+												})
+
+												It("Should return an error if failed to create the configMap for the playbook for the worker configuration job", func() {
+													// given
+													configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+													// when
+													result, err := reconciler.Reconcile(requestContext, request)
+													// then
+													Expect(err).To(Equal(errFailed))
+													Expect(result).To(Equal(resultRequeue))
+												})
+
+												It("Should return requeue if succeeded to create the configMap for the playbook for the worker configuration job", func() {
+													// given
+													configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+													// when
+													result, err := reconciler.Reconcile(requestContext, request)
+													// then
+													Expect(err).To(BeNil())
+													Expect(result).To(Equal(resultRequeue))
+												})
+											})
+
+											Context("ConfigMap for configuration playbook exists", func() {
+												const (
+													workerOSBuildWorkerConfigConfigMapName = "osbuild-worker-config"
+												)
+
+												var (
+													workerConfigPlaybookConfigMap = corev1.ConfigMap{
+														ObjectMeta: metav1.ObjectMeta{
+															Namespace: operatorNamespace,
+															Name:      workerConfigPlaybookConfigMapName,
+														},
+													}
+												)
+
+												BeforeEach(func() {
+													configMapRepository.EXPECT().Read(requestContext, workerConfigPlaybookConfigMapName, operatorNamespace).Return(&workerConfigPlaybookConfigMap, nil)
+												})
+
+												It("Should return an error if failed to get the configMap for the osbuild-worker config", func() {
+													// given
+													configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
+													// when
+													result, err := reconciler.Reconcile(requestContext, request)
+													// then
+													Expect(err).To(Equal(errFailed))
+													Expect(result).To(Equal(resultRequeue))
+												})
+
+												Context("ConfigMap for osbuild-worker config not found", func() {
+													BeforeEach(func() {
+														configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
+													})
+
+													It("Should return an error if failed to create the configMap for the osbuild-worker config", func() {
+														// given
+														configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+														// when
+														result, err := reconciler.Reconcile(requestContext, request)
+														// then
+														Expect(err).To(Equal(errFailed))
+														Expect(result).To(Equal(resultRequeue))
+													})
+
+													It("Should return requeue if succeeded to create the configMap for the osbuild-worker config", func() {
+														// given
+														configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+														// when
+														result, err := reconciler.Reconcile(requestContext, request)
+														// then
+														Expect(err).To(BeNil())
+														Expect(result).To(Equal(resultRequeue))
+													})
+												})
+
+												Context("ConfigMap for the osbuild-worker config exists", func() {
+													var (
+														workerOSBuildWorkerConfigConfigMap = corev1.ConfigMap{
+															ObjectMeta: metav1.ObjectMeta{
+																Namespace: operatorNamespace,
+																Name:      workerOSBuildWorkerConfigConfigMapName,
+															},
+														}
+													)
+
+													BeforeEach(func() {
+														configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(&workerOSBuildWorkerConfigConfigMap, nil)
+													})
+
+													It("Should return Done", func() {
+														// when
+														result, err := reconciler.Reconcile(requestContext, request)
+														// then
+														Expect(err).To(BeNil())
+														Expect(result).To(Equal(resultDone))
+													})
+												})
+											})
 										})
 									})
 								})

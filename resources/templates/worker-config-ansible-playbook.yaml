@@ -1,0 +1,166 @@
+- name: Configure OSBuild Worker Machine
+  hosts: all
+  vars:
+    rpmrepo_distribution: "{{ .RPMRepoDistribution }}"
+    osbuild_composer_tag: "{{ .OSBuildComposerTag }}"
+    osbuild_tag: "{{ .OSBuildTag }}"
+    local_osbuild_certs_dir: "{{ .OSBuildWorkerCertsDir }}"
+    osbuild_worker_certificate_directory: "/etc/osbuild-composer"
+    local_osbuild_config_dir: "{{ .OSBuildWorkerConfigDir }}"
+    osbuild_worker_config_directory: "/etc/osbuild-worker/"
+    osbuild_worker_config_file: "{{ .OSBuildWorkerConfigFile }}"
+    osbuild_worker_s3_creds_file: "{{ .OSBuildWorkerS3CredsFile }}"
+    osbuild_worker_s3_ca_bundle_file: "{{ .OSBuildWorkerS3CABundleFile }}"
+  gather_facts: yes
+  become: yes
+  tasks:
+  - name: Get RH Credentials
+    delegate_to: localhost
+    become: no
+    no_log: True
+    block:
+    - name: Get RH User
+      slurp:
+        src: {{"'{{ item }}'"}}
+      register: cred_files_content
+      loop:
+      - "{{ .RHCredentialsDir }}/{{ .RHCredentialsUsernameKey }}"
+      - "{{ .RHCredentialsDir }}/{{ .RHCredentialsPasswordKey }}"
+    - set_fact:
+        rh_username: {{"'{{ cred_files_content.results[0].content | b64decode}}'"}}
+        rh_password: {{"'{{ cred_files_content.results[1].content | b64decode}}'"}}
+  - name: Get commit hashes from tags
+    delegate_to: localhost
+    become: no
+    block:
+    - name: Get osbuild-composer releases
+      uri:
+        url: "https://api.github.com/repos/osbuild/osbuild-composer/tags"
+      register: composer_releases
+    - name: Get osbuild releases
+      uri:
+        url: "https://api.github.com/repos/osbuild/osbuild/tags"
+      register: osbuild_releases
+    - set_fact:
+        composer_release: {{"\"{{ composer_releases.json | selectattr('name', '==', osbuild_composer_tag)| first }}\""}}
+        osbuild_release: {{"\"{{ osbuild_releases.json | selectattr('name', '==', osbuild_tag)| first }}\""}}
+  - name: Register the machine with RH
+    community.general.packaging.os.redhat_subscription:
+      state: present
+      username: {{"'{{ rh_username }}'"}}
+      password: {{"'{{ rh_password }}'"}}
+      auto_attach: true
+    retries: 3
+    delay: 5
+  - name: Add osbuild-composer repository
+    tags:
+    - rpmrepo
+    yum_repository:
+      name: "composer"
+      description: {{"'osbuild-composer commit {{ composer_release.commit.sha }}'"}}
+      baseurl: {{"'http://osbuild-composer-repos.s3.amazonaws.com/osbuild-composer/{{ rpmrepo_distribution }}/{{ ansible_architecture }}/{{ composer_release.commit.sha }}'"}}
+      enabled: yes
+      gpgcheck: no
+      priority: "5"
+
+  - name: Add osbuild repository
+    tags:
+    - rpmrepo
+    yum_repository:
+      name: "osbuild"
+      description: {{"'osbuild commit {{ osbuild_release.commit.sha }}'"}}
+      baseurl: {{"'http://osbuild-composer-repos.s3-website.us-east-2.amazonaws.com/osbuild/{{ rpmrepo_distribution }}/{{ ansible_architecture }}/{{ osbuild_release.commit.sha }}'"}}
+      enabled: yes
+      gpgcheck: no
+      priority: "5"
+
+  - name: Upgrade all packages
+    package:
+      name: "*"
+      state: latest
+    register: result
+    retries: 5
+    until: result is success
+
+  - name: Install worker rpm
+    package:
+      name:
+      - osbuild-composer-worker
+      state: present
+
+  - name: Copy OSBuild Worker Certificates
+    block:
+    - name: Create certificate directory
+      ansible.builtin.file:
+        path: {{"'{{ osbuild_worker_certificate_directory }}'"}}
+        state: directory
+        mode: '0755'
+    - name: Copy the certificates
+      ansible.builtin.copy:
+        src: {{"'{{ local_osbuild_certs_dir }}/{{ item.src }}'"}}
+        dest: {{"'{{ osbuild_worker_certificate_directory }}/{{ item.dest }}'"}}
+        mode: '0400'
+      loop:
+      - src: ca.crt
+        dest: ca-crt.pem
+      - src: tls.crt
+        dest: worker-crt.pem
+      - src: tls.key
+        dest: worker-key.pem
+
+  - name: Create osbuild-worker etc dir
+    ansible.builtin.file:
+      path: {{"'{{ osbuild_worker_config_directory }}'"}}
+      state: directory
+      mode: '0755'
+
+  - name: Copy the OSBuild-Worker configuration file
+    ansible.builtin.copy:
+      src: {{"'{{ local_osbuild_config_dir }}/{{ osbuild_worker_config_file }}'"}}
+      dest: {{"'{{ osbuild_worker_config_directory }}/{{ osbuild_worker_config_file }}'"}}
+      mode: '0400'
+
+  - name: Create the S3 Credentials file
+    no_log: True
+    block:
+    - name: Get the credentials from the local files
+      delegate_to: localhost
+      become: no
+      block:
+      - name: Read the credential files
+        slurp:
+          src: {{"'{{ item }}'"}}
+        register: s3_cred_files_content
+        loop:
+        - "{{ .OSBuildWorkerS3CredsDir }}/{{ .OSBuildWorkerS3CredsAccessKeyIDKey }}"
+        - "{{ .OSBuildWorkerS3CredsDir }}/{{ .OSBuildWorkerS3CredsSecretAccessKeyKey }}"
+      - set_fact:
+          s3_creds_access_key_id: {{"'{{ s3_cred_files_content.results[0].content | b64decode}}'"}}
+          s3_creds_secret_access_key: {{"'{{ s3_cred_files_content.results[1].content | b64decode}}'"}}
+    - name: Write the credentials to the file
+      ansible.builtin.copy:
+        content: |
+          [default]
+          aws_access_key_id = {{"{{ s3_creds_access_key_id }}"}}
+          aws_secret_access_key = {{"{{ s3_creds_secret_access_key }}"}}
+        dest: {{"'{{ osbuild_worker_config_directory }}/{{ osbuild_worker_s3_creds_file }}'"}}
+        mode: '0400'
+
+    - name: Handle S3 CA Bundle file
+      block:
+      - name: Check if exists
+        delegate_to: localhost
+        become: no
+        ansible.builtin.stat:
+          path: "{{ .OSBuildWorkerS3CABundleDir }}/{{ .OSBuildWorkerS3CABundleKey }}"
+        register: ca_bundle_file
+      - name: Copy the S3 CA Bundle file if exists
+        ansible.builtin.copy:
+          src: "{{ .OSBuildWorkerS3CABundleDir }}/{{ .OSBuildWorkerS3CABundleKey }}"
+          dest: {{"'{{ osbuild_worker_config_directory }}/{{ osbuild_worker_s3_ca_bundle_file }}'"}}
+        when: ca_bundle_file.stat.exists
+
+  - name: Run the Worker
+    ansible.builtin.systemd:
+      state: started
+      name: "osbuild-remote-worker@{{ .ComposerWorkerAPIServiceName }}:443"

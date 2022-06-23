@@ -1,0 +1,19 @@
+FROM registry.access.redhat.com/ubi8/python-39
+
+USER 0
+
+COPY resources/ansible/requirements.yml /tmp/requirements.yml
+
+RUN dnf install skopeo -y && \
+    pip install --upgrade pip && \
+    pip install openshift && \
+    pip install jmespath && \
+    pip install netaddr && \
+    pip install ansible==2.9.27 && \
+    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz | \
+    tar -xvzf - -C /usr/local/bin/ oc && chmod 755 /usr/local/bin/oc && ln -s /usr/local/bin/oc /usr/local/bin/kubectl && \
+    ansible-galaxy collection install -r /tmp/requirements.yml
+
+RUN chgrp -R 0 $HOME && chmod -R g=u $HOME
+
+USER 1001

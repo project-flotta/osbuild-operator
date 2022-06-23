@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: {{ .WorkerConfigJobNamespace }}
+  name: {{ .WorkerConfigJobName }}
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - image: "{{ .WorkerConfigJobImageName }}:{{ .WorkerConfigJobImageTag }}"
+          env:
+            - name: ANSIBLE_DIR
+              value: /var/ansible
+            - name: ANSIBLE_CONFIG
+              value: $ANSIBLE_DIR/{{ .WorkerConfigAnsibleConfigConfigMapKey }}
+          command:
+            - /bin/bash
+            - -c
+            - "ansible-playbook -i $ANSIBLE_DIR/{{ .WorkerConfigInventoryConfigMapKey }} $ANSIBLE_DIR/{{ .WorkerConfigPlaybookConfigMapKey }}"
+          volumeMounts:
+            - name: ssh-key
+              mountPath: {{ .WorkerConfigJobSSHKeyDir }}
+              readOnly: true
+            - name: ansible
+              mountPath: /var/ansible
+              readOnly: true
+            - name: rh-creds
+              mountPath: {{ .RHCredentialsDir }}
+              readOnly: true
+            - name: osbuild-certs
+              mountPath: {{ .OSBuildWorkerCertsDir }}
+              readOnly: true
+            - name: osbuild-config
+              mountPath: {{ .OSBuildWorkerConfigDir }}
+            - name: s3-creds
+              mountPath: {{ .OSBuildWorkerS3CredsDir }}
+          imagePullPolicy: Always
+          name: ansible
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: {{ .WorkerSSHKeysSecretName }}
+            defaultMode: 0400
+        - name: ansible
+          projected:
+            sources:
+            - configMap:
+                name: {{ .WorkerConfigAnsibleConfigConfigMapName }}
+            - configMap:
+                name: {{ .WorkerConfigPlaybookConfigMapName }}
+            - configMap:
+                name: {{ .WorkerConfigInventoryConfigMapName }}
+        - name: rh-creds
+          secret:
+            secretName: {{ .RedHatCredsSecretName }}
+        - name: osbuild-certs
+          secret:
+            secretName: {{ .WorkerCertificateName }}
+        - name: osbuild-config
+          configMap:
+            name: {{ .WorkerOSBuildWorkerConfigConfigMapName }}
+        - name: s3-creds
+          secret:
+            secretName: {{ .WorkerS3CredsSecretName }}
