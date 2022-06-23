@@ -128,7 +128,7 @@ spec:
                         description: CABundleSecretReference is a reference to a secret
                           in the same namespace, containing the CA certificate to
                           use when connecting to the S3 service (optional, default
-                          empty)
+                          empty) If provided the required key is ca-bundle
                         properties:
                           name:
                             description: Name is the name of the resource in the same

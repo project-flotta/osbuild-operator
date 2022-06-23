@@ -48,6 +48,11 @@ endif
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+
+# Worker setup job container
+SETUP_IMG ?= quay.io/project-flotta/osbuild-operator-worker-setup:v0.1
+SETUP_DOCKERFILE = Dockerfile.WorkerSetupJob
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
 
@@ -202,6 +207,14 @@ docker-build: test ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_RUNTIME) push ${IMG}
+
+.PHONY: setup-image-build
+setup-image-build: # Build container image for the Worker setup job
+	$(CONTAINER_RUNTIME) build -t ${SETUP_IMG} -f ${SETUP_DOCKERFILE} .
+
+.PHONY: setup-image-push
+setup-image-push: ## Push the Worker setup job image.
+	$(CONTAINER_RUNTIME) push ${SETUP_IMG}
 
 ##@ Deployment
 

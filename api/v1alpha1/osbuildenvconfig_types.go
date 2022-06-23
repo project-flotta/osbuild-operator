@@ -138,6 +138,7 @@ type GenericS3ServiceConfig struct {
 	Endpoint string `json:"endpoint"`
 	// CABundleSecretReference is a reference to a secret in the same namespace,
 	// containing the CA certificate to use when connecting to the S3 service (optional, default empty)
+	// If provided the required key is ca-bundle
 	// +kubebuilder:validation:Optional
 	CABundleSecretReference *buildv1.SecretLocalReference `json:"caBundleSecretReference,omitempty"`
 	// SkipSSLVerification when set to true the SSL certificate will not be verified (optional, default False)
