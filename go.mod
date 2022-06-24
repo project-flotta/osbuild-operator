@@ -3,7 +3,7 @@ module github.com/project-flotta/osbuild-operator
 go 1.17
 
 require (
-	github.com/cert-manager/cert-manager v1.8.1
+	github.com/cert-manager/cert-manager v1.8.2
 	github.com/kdomanski/iso9660 v0.3.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/onsi/ginkgo/v2 v2.1.4
