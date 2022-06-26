@@ -48,3 +48,11 @@ Please note that the provisioning of the OSBuild Operator will also provision th
 - Run the operator locally (outside the cluster):
 
   `make run`
+
+## Create OSBuildEnvConfig singleton CR
+- Apply postgresssql (please enter a real Password)
+  `oc new-app --env-file config/samples/psql.env postgresql:13-el8 -n osbuild`
+- Create new secret (please enter a real encoded password)
+  `oc create -f config/samples/postgress_secret.yaml`
+- Apply OSBuildEnvConfig
+  `oc create -f config/samples/osbuilder_v1alpha1_osbuildenvconfig.yaml`
