@@ -148,7 +148,10 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should fail on OSBuildConfig patch failure", func() {
 			// given
-			osBuildConfigRepository.EXPECT().PatchStatus(ctx, gomock.Any(), gomock.Any()).Return(fmt.Errorf("boom"))
+			cp := osBuildConfig.DeepCopy()
+			one := 1
+			cp.Status.LastVersion = &one
+			osBuildConfigRepository.EXPECT().PatchStatus(ctx, cp, gomock.Any()).Return(fmt.Errorf("boom"))
 
 			// when
 			err := creator.Create(ctx, &osBuildConfig)
@@ -161,7 +164,7 @@ var _ = Describe("OSBuild creation", func() {
 			// given
 			osBuildConfigRepository.EXPECT().PatchStatus(ctx, gomock.Any(), gomock.Any())
 
-			osBuildRepository.EXPECT().Create(ctx, gomock.Any()).Return(fmt.Errorf("boom"))
+			osBuildRepository.EXPECT().Create(ctx, &expectedOSBuild).Return(fmt.Errorf("boom"))
 
 			// when
 			err := creator.Create(ctx, &osBuildConfig)
@@ -183,6 +186,10 @@ var _ = Describe("OSBuild creation", func() {
 		)
 
 		BeforeEach(func() {
+			osBuildConfig.Spec.Template = &v1alpha1.Template{
+				OSBuildConfigTemplateRef: templateName,
+			}
+
 			templateCustomizations := v1alpha1.Customizations{
 				Packages: []string{"tmpl"},
 				Users:    []v1alpha1.User{{Name: "user-tmpl"}},
@@ -222,10 +229,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		DescribeTable("should create with no kickstart", func(iso *v1alpha1.IsoConfiguration) {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			template.Spec.Iso = iso
 			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
 
@@ -255,10 +258,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should create when target kickstart map already exists", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
 				Kickstart: &v1alpha1.KickstartFile{
 					Raw: &kickstartTxt,
@@ -290,10 +289,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should create with raw kickstart", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
 				Kickstart: &v1alpha1.KickstartFile{
 					Raw: &kickstartTxt,
@@ -328,10 +323,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should create with ConfigMap kickstart", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
 			kickstartTemplateCMName := "kickstart-tmpl-cm"
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
@@ -379,10 +370,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should fail when template not found", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).
 				Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
 
@@ -395,9 +382,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should fail when kickstart template config map not found", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
 			kickstartTemplateCMName := "kickstart-tmpl-cm"
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
 				Kickstart: &v1alpha1.KickstartFile{
@@ -420,10 +404,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should fail when target kickstart config map reading fails", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
 				Kickstart: &v1alpha1.KickstartFile{
 					Raw: &kickstartTxt,
@@ -444,10 +424,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should fail when target kickstart config map creation fails", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
 				Kickstart: &v1alpha1.KickstartFile{
 					Raw: &kickstartTxt,
@@ -470,10 +446,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should fail when target kickstart config map patching fails", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
 				Kickstart: &v1alpha1.KickstartFile{
 					Raw: &kickstartTxt,
@@ -508,10 +480,6 @@ var _ = Describe("OSBuild creation", func() {
 
 		It("should fail creating with malformed template kickstart config map", func() {
 			// given
-			osBuildConfig.Spec.Template = &v1alpha1.Template{
-				OSBuildConfigTemplateRef: templateName,
-			}
-
 			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
 			kickstartTemplateCMName := "kickstart-tmpl-cm"
 			template.Spec.Iso = &v1alpha1.IsoConfiguration{
