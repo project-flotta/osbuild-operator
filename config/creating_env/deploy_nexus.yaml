@@ -1,0 +1,26 @@
+apiVersion: redhatgov.io/v1alpha1
+kind: Nexus
+metadata:
+  name: nexus-osbuild
+spec:
+  nexus:
+    allowAnonymousAccess: true
+    expose:
+      docker: true
+      kind: Route
+      ssl: true
+    oauth:
+      enabled: false
+    image:
+      src: registry.connect.redhat.com/sonatype/nexus-repository-manager
+      tag: latest
+      pullPolicy: Always
+    resources:
+      cpu:
+        request: "1"
+        limit: "4"
+      memory:
+        request: 2048Mi
+        limit: 4096Mi
+    volumeSize: 100Gi
+  persistent: true
