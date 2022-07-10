@@ -49,10 +49,39 @@ Please note that the provisioning of the OSBuild Operator will also provision th
 
   `make run`
 
+## Store rhel image in accessible endpoint
+### Deploy nexus
+- Deploy nexus operator - use that instruction: https://github.com/RedHatGov/nexus-operator#installation
+- Deploy a nexus instance:
+  `oc apply -g config/creating_env/deploy_nexus.yaml -n osbuild`
+- Get admin password by reading the secret 
+  `oc get secret nexus-osbuild-admin-credentials -o yaml -n osbuild`
+- Log in the nexus UI (use the route URL) and create a raw-host repository
+- Upload the rhel qcow2 image 
+  ```
+  pip install nexus3-cli
+  nexus3 login --url <URL> --username admin --password <PASSWORD>
+  nexus3 upload worker-image.qcow2 raw-hosted
+  ```
+
+## Create generic S3 service
+- Deploy MiniO
+  `oc apply -f config/creating_env/deploy_minio.yaml`
+- Create a bucket `osbuild-images`
+- Create a secret
+  `oc create secret generic osbuild-s3-credentials -n osbuild --from-literal=access-key-id=minioadmin --from-literal=secret-access-key=minioadmin --type=kubernetes.io/glusterfs`
+
 ## Create OSBuildEnvConfig singleton CR
 - Apply postgresssql (please enter a real Password)
-  `oc new-app --env-file config/samples/psql.env postgresql:13-el8 -n osbuild`
+  `oc new-app --env-file config/creating_env/psql.env postgresql:13-el8 -n osbuild`
 - Create new secret (please enter a real encoded password)
-  `oc create -f config/samples/postgress_secret.yaml`
+  `oc create -f config/creating_env/postgress_secret.yaml`
 - Apply OSBuildEnvConfig
   `oc create -f config/samples/osbuilder_v1alpha1_osbuildenvconfig.yaml`
+
+## SSH into osbuild-workers
+- Get the secret that contains the ssh-key 
+  `oc get secret osbuild-worker-ssh -n osbuild -o yaml`
+- copy into a debug node's pod (for example worker-1-debug)
+  `oc cp worker-ssh.key worker-1-debug:/root/`
+- ssh into the worker with cloud-user and the VMI's IP
