@@ -69,7 +69,7 @@ Please note that the provisioning of the OSBuild Operator will also provision th
   ```
 - Upload the rhel qcow2 image
   ```bash
-  nexus3 upload rhel-8.5-x86_64-kvm.qcow2 disk-images
+  nexus3 upload rhel-8.6-x86_64-kvm.qcow2 disk-images
   ```
 
 ## Create generic S3 service
