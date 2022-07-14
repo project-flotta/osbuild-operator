@@ -7,6 +7,7 @@ This repo has the operator which provides a K8S API for building [OSBuild](https
 ### Requirements
 
 - `go >= 1.17`
+- To provision Internal Worker VMs, or to follow the sample for the External Worker VM, `kubevirt-hyperconverged` is required
 
 ### Test Requirements
 - `genisoimage`
@@ -112,10 +113,34 @@ Currently the controller does not support creating the PSQL server on its own, m
   oc create -f config/creating_env/postgress_secret.yaml
   ```
 
+## External Worker VM using CNV
+- Create an SSH key-pair
+  ```bash
+  ssh-keygen -t rsa -b 4096 -C cloud-user@external-builder -f ~/.ssh/external-builder
+  ```
+- Create symlinks to the files to facilitate the next step
+  ```bash
+  ln -s ~/.ssh/external-builder.pub config/creating_env/ssh-publickey
+  ln -s ~/.ssh/external-builder config/creating_env/ssh-privatekey
+  ```
+- Generate the secret
+  ```bash
+  oc create secret generic external-builder-ssh-pair --from-file=config/creating_env/ssh-privatekey --from-file=config/creating_env/ssh-publickey -n osbuild
+  ```
+- Deploy the VM
+  ```bash
+  oc apply -n osbuild -f config/creating_env/external-worker-vm.yaml
+  ```
+- Get VM Address
+  ```bash
+  oc get vmi external-builder -o jsonpath={.status.interfaces[0].ipAddress}
+  ```
+
 ## Create OSBuildEnvConfig singleton CR
 - Apply OSBuildEnvConfig
   ```bash
   export CLUSTER_DOMAIN='mycluster.example.com'
+  export EXTERNAL_WORKER_IP=`oc get vmi external-builder -o jsonpath={.status.interfaces[0].ipAddress}`
   cat config/samples/osbuilder_v1alpha1_osbuildenvconfig.yaml | envsubst | oc apply -f -
   ```
 

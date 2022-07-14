@@ -50,6 +50,7 @@
       username: {{"'{{ rh_username }}'"}}
       password: {{"'{{ rh_password }}'"}}
       auto_attach: true
+      force_register: true
     retries: 3
     delay: 5
   - name: Add osbuild-composer repository
@@ -163,4 +164,4 @@
   - name: Run the Worker
     ansible.builtin.systemd:
       state: started
-      name: "osbuild-remote-worker@{{ .ComposerWorkerAPIServiceName }}:443"
+      name: "osbuild-remote-worker@{{ .WorkerAPIAddress }}:443"

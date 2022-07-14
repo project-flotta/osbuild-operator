@@ -19,10 +19,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	certmanagermetav1 "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	osbuildv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	. "github.com/onsi/gomega"
@@ -32,6 +35,7 @@ import (
 	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
 	"github.com/project-flotta/osbuild-operator/internal/repository/deployment"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildenvconfig"
+	"github.com/project-flotta/osbuild-operator/internal/repository/route"
 	"github.com/project-flotta/osbuild-operator/internal/repository/secret"
 	"github.com/project-flotta/osbuild-operator/internal/repository/service"
 
@@ -65,6 +69,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		certificateRepository      *certificate.MockRepository
 		configMapRepository        *configmap.MockRepository
 		deploymentRepository       *deployment.MockRepository
+		routeRepository            *route.MockRepository
 		serviceRepository          *service.MockRepository
 		secretRepository           *secret.MockRepository
 
@@ -74,7 +79,8 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		errNotFound error
 		errFailed   error
 
-		instance osbuildv1alpha1.OSBuildEnvConfig
+		instance       osbuildv1alpha1.OSBuildEnvConfig
+		ownerReference metav1.OwnerReference
 
 		request = ctrl.Request{
 			NamespacedName: types.NamespacedName{
@@ -107,6 +113,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		certificateRepository = certificate.NewMockRepository(mockCtrl)
 		configMapRepository = configmap.NewMockRepository(mockCtrl)
 		deploymentRepository = deployment.NewMockRepository(mockCtrl)
+		routeRepository = route.NewMockRepository(mockCtrl)
 		serviceRepository = service.NewMockRepository(mockCtrl)
 		secretRepository = secret.NewMockRepository(mockCtrl)
 
@@ -117,6 +124,8 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		Expect(err).To(BeNil())
 		err = certmanagerv1.AddToScheme(scheme)
 		Expect(err).To(BeNil())
+		err = routev1.AddToScheme(scheme)
+		Expect(err).To(BeNil())
 
 		reconciler = &controllers.OSBuildEnvConfigReconciler{
 			Scheme:                     scheme,
@@ -124,6 +133,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			CertificateRepository:      certificateRepository,
 			ConfigMapRepository:        configMapRepository,
 			DeploymentRepository:       deploymentRepository,
+			RouteRepository:            routeRepository,
 			ServiceRepository:          serviceRepository,
 			SecretRepository:           secretRepository,
 		}
@@ -160,6 +170,15 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 					},
 				},
 			},
+		}
+
+		ownerReference = metav1.OwnerReference{
+			APIVersion:         instance.APIVersion,
+			Kind:               instance.Kind,
+			Name:               instance.Name,
+			UID:                instance.UID,
+			BlockOwnerDeletion: pointer.BoolPtr(true),
+			Controller:         pointer.BoolPtr(true),
 		}
 	})
 
@@ -322,60 +341,40 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		Context("With finalizer", func() {
 			const (
-				certificateDuration            = 87600
-				composerComposerAPIServiceName = "osbuild-composer"
-				composerWorkerAPIServiceName   = "osbuild-worker"
+				composerWorkerAPIRouteName   = "osbuild-worker"
+				composerWorkerAPIServiceName = "osbuild-worker"
+				composerWorkerAPIRouteHost   = "osbuild-worker.apps.my-cluster.example.com"
 			)
+
 			var (
-				composerCertificate certmanagerv1.Certificate
+				composerWorkerAPIRoute routev1.Route
 			)
+
 			BeforeEach(func() {
 				instance.ObjectMeta.Finalizers = []string{osBuildOperatorFinalizer}
 
-				composerCertificate = certmanagerv1.Certificate{
+				composerWorkerAPIRoute = routev1.Route{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      composerCertificateName,
-						Namespace: operatorNamespace,
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion:         instance.APIVersion,
-								Kind:               instance.Kind,
-								Name:               instance.Name,
-								UID:                instance.UID,
-								BlockOwnerDeletion: pointer.BoolPtr(true),
-								Controller:         pointer.BoolPtr(true),
-							},
-						},
+						Name:            composerWorkerAPIRouteName,
+						Namespace:       conf.GlobalConf.WorkingNamespace,
+						OwnerReferences: []metav1.OwnerReference{ownerReference},
 					},
-					Spec: certmanagerv1.CertificateSpec{
-						SecretName: composerCertificateName,
-						PrivateKey: &certmanagerv1.CertificatePrivateKey{
-							Algorithm: "ECDSA",
-							Size:      256,
+					Spec: routev1.RouteSpec{
+						To: routev1.RouteTargetReference{
+							Kind: "Service",
+							Name: composerWorkerAPIServiceName,
 						},
-						DNSNames: []string{
-							composerComposerAPIServiceName,
-							composerWorkerAPIServiceName,
-						},
-						Duration: &metav1.Duration{
-							Duration: time.Hour * certificateDuration,
-						},
-						IssuerRef: certmanagermetav1.ObjectReference{
-							Group: "cert-manager.io",
-							Kind:  "Issuer",
-							Name:  caIssuerName,
+						TLS: &routev1.TLSConfig{
+							Termination: routev1.TLSTerminationPassthrough,
 						},
 					},
 				}
+
 			})
 
-			AfterEach(func() {
-				instance.ObjectMeta.Finalizers = nil
-			})
-
-			It("Should return an error if it failed to get the certificate", func() {
+			It("Should return an error if failed to get the Route for the Composer Worker API ", func() {
 				// given
-				certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
+				routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errFailed)
 				// when
 				result, err := reconciler.Reconcile(requestContext, request)
 				// then
@@ -383,62 +382,119 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 				Expect(result).To(Equal(resultRequeue))
 			})
 
-			It("Should return an error if failed to create the certificate", func() {
-				// given
-				certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
-				certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(errFailed)
-				// when
-				result, err := reconciler.Reconcile(requestContext, request)
-				// then
-				Expect(err).To(Equal(errFailed))
-				Expect(result).To(Equal(resultRequeue))
-			})
+			Context("Route for the Composer Worker API not found", func() {
 
-			It("Should return requeue if the certificate was created", func() {
-				// given
-				certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
-				certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(nil)
-				// when
-				result, err := reconciler.Reconcile(requestContext, request)
-				// then
-				Expect(err).To(BeNil())
-				Expect(result).To(Equal(resultRequeue))
-			})
-
-			Context("Certificate is already created", func() {
 				BeforeEach(func() {
-					certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificate, nil)
+					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errNotFound)
 				})
 
-				It("Should return an error if PSQL information is not set", func() {
+				It("Should return an error if failed to create the Route for the Composer Worker API", func() {
 					// given
-					psqlError := fmt.Errorf("creating a PSQL service is not yet implemented")
+					routeRepository.EXPECT().Create(requestContext, &composerWorkerAPIRoute).Return(errFailed)
 					// when
 					result, err := reconciler.Reconcile(requestContext, request)
 					// then
-					Expect(err).To(Equal(psqlError))
+					Expect(err).To(Equal(errFailed))
+					Expect(result).To(Equal(resultRequeue))
+				})
+
+				It("Should return requeue if succeeded to create the Route for the Composer Worker API", func() {
+					// given
+					routeRepository.EXPECT().Create(requestContext, &composerWorkerAPIRoute).Return(nil)
+					// when
+					result, err := reconciler.Reconcile(requestContext, request)
+					// then
+					Expect(err).To(BeNil())
+					Expect(result).To(Equal(resultRequeue))
+				})
+			})
+
+			Context("Route for the Composer Worker API exists ", func() {
+				BeforeEach(func() {
+					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
+					composerWorkerAPIRoute.Status.Ingress = []routev1.RouteIngress{
+						{
+							Conditions: []routev1.RouteIngressCondition{
+								{
+									Type: routev1.RouteAdmitted,
+								},
+							},
+						},
+					}
+				})
+
+				It("Should return an error if failed to check if the Route for the Composer Worker API is ready", func() {
+					//given
+					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errFailed)
+					// when
+					result, err := reconciler.Reconcile(requestContext, request)
+					// then
+					Expect(err).To(Equal(errFailed))
 					Expect(result).To(Equal(resultRequeue))
 
 				})
 
-				Context("PSQL information is set", func() {
-					const (
-						composerConfigMapName = "osbuild-composer-config"
-					)
-					BeforeEach(func() {
-						var sslMode osbuildv1alpha1.DBSSLMode = "disable"
+				It("Should return requeue if the Route for the Composer Worker API is not ready", func() {
+					// given
+					composerWorkerAPIRoute.Status.Ingress[0].Conditions[0].Status = corev1.ConditionFalse
+					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
+					// when
+					result, err := reconciler.Reconcile(requestContext, request)
+					// then
+					Expect(err).To(BeNil())
+					Expect(result).To(Equal(reconcile.Result{Requeue: true, RequeueAfter: time.Second * 10}))
+				})
 
-						instance.Spec.Composer.PSQL = &osbuildv1alpha1.ComposerDBConfig{
-							ConnectionSecretReference: buildv1.SecretLocalReference{
-								Name: dbSecretName,
+				Context("Worker API Route is ready", func() {
+					const (
+						certificateDuration            = 87600
+						composerComposerAPIServiceName = "osbuild-composer"
+					)
+					var (
+						composerCertificate certmanagerv1.Certificate
+					)
+
+					BeforeEach(func() {
+						composerWorkerAPIRoute.Status.Ingress[0].Conditions[0].Status = corev1.ConditionTrue
+						composerWorkerAPIRoute.Status.Ingress[0].Host = composerWorkerAPIRouteHost
+						routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
+
+						composerCertificate = certmanagerv1.Certificate{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:            composerCertificateName,
+								Namespace:       operatorNamespace,
+								OwnerReferences: []metav1.OwnerReference{ownerReference},
 							},
-							SSLMode: &sslMode,
+							Spec: certmanagerv1.CertificateSpec{
+								SecretName: composerCertificateName,
+								PrivateKey: &certmanagerv1.CertificatePrivateKey{
+									Algorithm: "ECDSA",
+									Size:      256,
+								},
+								DNSNames: []string{
+									composerComposerAPIServiceName,
+									composerWorkerAPIServiceName,
+									composerWorkerAPIRouteHost,
+								},
+								Duration: &metav1.Duration{
+									Duration: time.Hour * certificateDuration,
+								},
+								IssuerRef: certmanagermetav1.ObjectReference{
+									Group: "cert-manager.io",
+									Kind:  "Issuer",
+									Name:  caIssuerName,
+								},
+							},
 						}
 					})
 
-					It("Should return an error if failed to get the configmap for the osbuild-composer configuration", func() {
+					AfterEach(func() {
+						instance.ObjectMeta.Finalizers = nil
+					})
+
+					It("Should return an error if it failed to get the certificate", func() {
 						// given
-						configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errFailed)
+						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
 						// when
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
@@ -446,10 +502,10 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						Expect(result).To(Equal(resultRequeue))
 					})
 
-					It("Should return an error if failed to create the configmap for the osbuild-composer configuration", func() {
+					It("Should return an error if failed to create the certificate", func() {
 						// given
-						configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
-						configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
+						certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(errFailed)
 						// when
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
@@ -457,10 +513,10 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						Expect(result).To(Equal(resultRequeue))
 					})
 
-					It("Should return requeue if the configmap for the osbuild-composer configuration was created", func() {
+					It("Should return requeue if the certificate was created", func() {
 						// given
-						configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
-						configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
+						certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(nil)
 						// when
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
@@ -468,75 +524,40 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						Expect(result).To(Equal(resultRequeue))
 					})
 
-					Context("ConfigMap for the Composer configuration exists", func() {
-						const (
-							composerProxyConfigMapName = "osbuild-composer-proxy-config"
-						)
-						var (
-							composerConfigConfigMap = corev1.ConfigMap{
-								ObjectMeta: metav1.ObjectMeta{
-									Namespace: operatorNamespace,
-									Name:      composerConfigMapName,
-								},
-							}
-						)
-
+					Context("Certificate is already created", func() {
 						BeforeEach(func() {
-							configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(&composerConfigConfigMap, nil)
+							certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificate, nil)
 						})
 
-						It("Should return an error if failed to get the configmap for the proxy configuration", func() {
+						It("Should return an error if PSQL information is not set", func() {
 							// given
-							configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errFailed)
+							psqlError := fmt.Errorf("creating a PSQL service is not yet implemented")
 							// when
 							result, err := reconciler.Reconcile(requestContext, request)
 							// then
-							Expect(err).To(Equal(errFailed))
+							Expect(err).To(Equal(psqlError))
 							Expect(result).To(Equal(resultRequeue))
+
 						})
 
-						It("Should return an error if failed to create the configmap for the proxy configuration", func() {
-							// given
-							configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
-							configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
-							// when
-							result, err := reconciler.Reconcile(requestContext, request)
-							// then
-							Expect(err).To(Equal(errFailed))
-							Expect(result).To(Equal(resultRequeue))
-						})
-
-						It("Should return requeue if the configmap for the proxy configuration was created", func() {
-							// given
-							configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
-							configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
-							// when
-							result, err := reconciler.Reconcile(requestContext, request)
-							// then
-							Expect(err).To(BeNil())
-							Expect(result).To(Equal(resultRequeue))
-						})
-
-						Context("ConfigMap for the Proxy configuration exists", func() {
+						Context("PSQL information is set", func() {
 							const (
-								composerDeploymentName = "composer"
+								composerConfigMapName = "osbuild-composer-config"
 							)
-							var (
-								proxyConfigConfigMap = corev1.ConfigMap{
-									ObjectMeta: metav1.ObjectMeta{
-										Namespace: operatorNamespace,
-										Name:      composerProxyConfigMapName,
-									},
-								}
-							)
-
 							BeforeEach(func() {
-								configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(&proxyConfigConfigMap, nil)
+								var sslMode osbuildv1alpha1.DBSSLMode = "disable"
+
+								instance.Spec.Composer.PSQL = &osbuildv1alpha1.ComposerDBConfig{
+									ConnectionSecretReference: buildv1.SecretLocalReference{
+										Name: dbSecretName,
+									},
+									SSLMode: &sslMode,
+								}
 							})
 
-							It("Should return an error if failed to get the composer deployment", func() {
+							It("Should return an error if failed to get the configmap for the osbuild-composer configuration", func() {
 								// given
-								deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errFailed)
+								configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errFailed)
 								// when
 								result, err := reconciler.Reconcile(requestContext, request)
 								// then
@@ -544,14 +565,48 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 								Expect(result).To(Equal(resultRequeue))
 							})
 
-							Context("Composer deployment not found", func() {
+							It("Should return an error if failed to create the configmap for the osbuild-composer configuration", func() {
+								// given
+								configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
+								configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+								// when
+								result, err := reconciler.Reconcile(requestContext, request)
+								// then
+								Expect(err).To(Equal(errFailed))
+								Expect(result).To(Equal(resultRequeue))
+							})
+
+							It("Should return requeue if the configmap for the osbuild-composer configuration was created", func() {
+								// given
+								configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
+								configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+								// when
+								result, err := reconciler.Reconcile(requestContext, request)
+								// then
+								Expect(err).To(BeNil())
+								Expect(result).To(Equal(resultRequeue))
+							})
+
+							Context("ConfigMap for the Composer configuration exists", func() {
+								const (
+									composerProxyConfigMapName = "osbuild-composer-proxy-config"
+								)
+								var (
+									composerConfigConfigMap = corev1.ConfigMap{
+										ObjectMeta: metav1.ObjectMeta{
+											Namespace: operatorNamespace,
+											Name:      composerConfigMapName,
+										},
+									}
+								)
+
 								BeforeEach(func() {
-									deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errNotFound)
+									configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(&composerConfigConfigMap, nil)
 								})
 
-								It("Should return an error if failed to create the composer deployment", func() {
+								It("Should return an error if failed to get the configmap for the proxy configuration", func() {
 									// given
-									deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+									configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errFailed)
 									// when
 									result, err := reconciler.Reconcile(requestContext, request)
 									// then
@@ -559,154 +614,48 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 									Expect(result).To(Equal(resultRequeue))
 								})
 
-								It("Should return requeue if the composer deployment was created", func() {
+								It("Should return an error if failed to create the configmap for the proxy configuration", func() {
 									// given
-									deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+									configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
+									configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+									// when
+									result, err := reconciler.Reconcile(requestContext, request)
+									// then
+									Expect(err).To(Equal(errFailed))
+									Expect(result).To(Equal(resultRequeue))
+								})
+
+								It("Should return requeue if the configmap for the proxy configuration was created", func() {
+									// given
+									configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
+									configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 									// when
 									result, err := reconciler.Reconcile(requestContext, request)
 									// then
 									Expect(err).To(BeNil())
 									Expect(result).To(Equal(resultRequeue))
 								})
-							})
 
-							Context("Composer Deployment exists", func() {
-								const (
-									composerComposerAPIPortName = "composer-api"
-								)
-								var (
-									composerDeployment = appsv1.Deployment{
-										ObjectMeta: metav1.ObjectMeta{
-											Namespace: operatorNamespace,
-											Name:      composerDeploymentName,
-										},
-									}
-
-									composerAPIExternalPort = intstr.FromInt(8080)
-
-									composerComposerAPIService corev1.Service
-								)
-
-								BeforeEach(func() {
-									deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(&composerDeployment, nil)
-
-									composerComposerAPIService = corev1.Service{
-										ObjectMeta: metav1.ObjectMeta{
-											Namespace: operatorNamespace,
-											Name:      composerComposerAPIServiceName,
-											OwnerReferences: []metav1.OwnerReference{
-												{
-													APIVersion:         instance.APIVersion,
-													Kind:               instance.Kind,
-													Name:               instance.Name,
-													UID:                instance.UID,
-													BlockOwnerDeletion: pointer.BoolPtr(true),
-													Controller:         pointer.BoolPtr(true),
-												},
-											},
-										},
-										Spec: corev1.ServiceSpec{
-											Type: corev1.ServiceTypeClusterIP,
-											Ports: []corev1.ServicePort{
-												{
-													Name:       composerComposerAPIPortName,
-													Port:       443,
-													Protocol:   "TCP",
-													TargetPort: composerAPIExternalPort,
-												},
-											},
-											Selector: map[string]string{
-												"app": "osbuild-composer",
-											},
-										},
-									}
-								})
-
-								It("Should return an error if failed to get the composer api service", func() {
-									// given
-									serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errFailed)
-									// when
-									result, err := reconciler.Reconcile(requestContext, request)
-									// then
-									Expect(err).To(Equal(errFailed))
-									Expect(result).To(Equal(resultRequeue))
-								})
-
-								Context("Composer API Service not found", func() {
-									BeforeEach(func() {
-										serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
-									})
-
-									It("Should return an error if failed to create the composer api service", func() {
-										// given
-										serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(errFailed)
-										// when
-										result, err := reconciler.Reconcile(requestContext, request)
-										// then
-										Expect(err).To(Equal(errFailed))
-										Expect(result).To(Equal(resultRequeue))
-									})
-
-									It("Should return requeue if the composer api service was created", func() {
-										// given
-										serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(nil)
-										// when
-										result, err := reconciler.Reconcile(requestContext, request)
-										// then
-										Expect(err).To(BeNil())
-										Expect(result).To(Equal(resultRequeue))
-									})
-								})
-
-								Context("Composer API Service exists", func() {
+								Context("ConfigMap for the Proxy configuration exists", func() {
 									const (
-										composerComposerAPIPortName = "composer-api"
-										composerWorkerAPIPortName   = "worker-api"
+										composerDeploymentName = "composer"
 									)
-
 									var (
-										composerWorkerAPIService corev1.Service
-
-										workerAPIExternalPort = intstr.FromInt(8700)
-									)
-									BeforeEach(func() {
-										serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(&composerComposerAPIService, nil)
-
-										composerWorkerAPIService = corev1.Service{
+										proxyConfigConfigMap = corev1.ConfigMap{
 											ObjectMeta: metav1.ObjectMeta{
 												Namespace: operatorNamespace,
-												Name:      composerWorkerAPIServiceName,
-												OwnerReferences: []metav1.OwnerReference{
-													{
-														APIVersion:         instance.APIVersion,
-														Kind:               instance.Kind,
-														Name:               instance.Name,
-														UID:                instance.UID,
-														BlockOwnerDeletion: pointer.BoolPtr(true),
-														Controller:         pointer.BoolPtr(true),
-													},
-												},
-											},
-											Spec: corev1.ServiceSpec{
-												Type: corev1.ServiceTypeClusterIP,
-												Ports: []corev1.ServicePort{
-													{
-														Name:       composerWorkerAPIPortName,
-														Port:       443,
-														Protocol:   "TCP",
-														TargetPort: workerAPIExternalPort,
-													},
-												},
-												Selector: map[string]string{
-													"app": "osbuild-composer",
-												},
+												Name:      composerProxyConfigMapName,
 											},
 										}
+									)
+
+									BeforeEach(func() {
+										configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(&proxyConfigConfigMap, nil)
 									})
 
-									It("Should return an error if failed to get the worker api service", func() {
+									It("Should return an error if failed to get the composer deployment", func() {
 										// given
-										serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errFailed)
+										deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errFailed)
 										// when
 										result, err := reconciler.Reconcile(requestContext, request)
 										// then
@@ -714,14 +663,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										Expect(result).To(Equal(resultRequeue))
 									})
 
-									Context("Worker API Service not found", func() {
+									Context("Composer deployment not found", func() {
 										BeforeEach(func() {
-											serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
+											deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errNotFound)
 										})
 
-										It("Should return an error if failed to create the worker api service", func() {
+										It("Should return an error if failed to create the composer deployment", func() {
 											// given
-											serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(errFailed)
+											deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 											// when
 											result, err := reconciler.Reconcile(requestContext, request)
 											// then
@@ -729,9 +678,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 											Expect(result).To(Equal(resultRequeue))
 										})
 
-										It("Should return requeue if the worker api service was created", func() {
+										It("Should return requeue if the composer deployment was created", func() {
 											// given
-											serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(nil)
+											deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 											// when
 											result, err := reconciler.Reconcile(requestContext, request)
 											// then
@@ -740,18 +689,52 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										})
 									})
 
-									Context("Worker API Service exists", func() {
+									Context("Composer Deployment exists", func() {
 										const (
-											workerConfigAnsibleConfigConfigMapName = "osbuild-worker-setup-ansible-config"
+											composerComposerAPIPortName = "composer-api"
+										)
+										var (
+											composerDeployment = appsv1.Deployment{
+												ObjectMeta: metav1.ObjectMeta{
+													Namespace: operatorNamespace,
+													Name:      composerDeploymentName,
+												},
+											}
+
+											composerAPIExternalPort = intstr.FromInt(8080)
+
+											composerComposerAPIService corev1.Service
 										)
 
 										BeforeEach(func() {
-											serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(&composerWorkerAPIService, nil)
+											deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(&composerDeployment, nil)
+
+											composerComposerAPIService = corev1.Service{
+												ObjectMeta: metav1.ObjectMeta{
+													Namespace:       operatorNamespace,
+													Name:            composerComposerAPIServiceName,
+													OwnerReferences: []metav1.OwnerReference{ownerReference},
+												},
+												Spec: corev1.ServiceSpec{
+													Type: corev1.ServiceTypeClusterIP,
+													Ports: []corev1.ServicePort{
+														{
+															Name:       composerComposerAPIPortName,
+															Port:       443,
+															Protocol:   "TCP",
+															TargetPort: composerAPIExternalPort,
+														},
+													},
+													Selector: map[string]string{
+														"app": "osbuild-composer",
+													},
+												},
+											}
 										})
 
-										It("Should return an error if failed to get the configMap for the ansible config ", func() {
+										It("Should return an error if failed to get the composer api service", func() {
 											// given
-											configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
+											serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errFailed)
 											// when
 											result, err := reconciler.Reconcile(requestContext, request)
 											// then
@@ -759,14 +742,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 											Expect(result).To(Equal(resultRequeue))
 										})
 
-										Context("ConfigMap for configuration ansible config not found", func() {
+										Context("Composer API Service not found", func() {
 											BeforeEach(func() {
-												configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
+												serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
 											})
 
-											It("Should return an error if failed to create the configMap for the ansible config for the worker configuration job", func() {
+											It("Should return an error if failed to create the composer api service", func() {
 												// given
-												configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+												serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(errFailed)
 												// when
 												result, err := reconciler.Reconcile(requestContext, request)
 												// then
@@ -774,9 +757,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												Expect(result).To(Equal(resultRequeue))
 											})
 
-											It("Should return requeue if succeeded to create the configMap for the ansible config for the worker configuration job", func() {
+											It("Should return requeue if the composer api service was created", func() {
 												// given
-												configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+												serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(nil)
 												// when
 												result, err := reconciler.Reconcile(requestContext, request)
 												// then
@@ -785,27 +768,46 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 											})
 										})
 
-										Context("ConfigMap for the ansible config exists", func() {
+										Context("Composer API Service exists", func() {
 											const (
-												workerConfigPlaybookConfigMapName = "osbuild-worker-setup-playbook"
+												composerComposerAPIPortName = "composer-api"
+												composerWorkerAPIPortName   = "worker-api"
 											)
 
 											var (
-												workerConfigAnsibleConfigConfigMap = corev1.ConfigMap{
+												composerWorkerAPIService corev1.Service
+
+												workerAPIExternalPort = intstr.FromInt(8700)
+											)
+											BeforeEach(func() {
+												serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(&composerComposerAPIService, nil)
+
+												composerWorkerAPIService = corev1.Service{
 													ObjectMeta: metav1.ObjectMeta{
-														Namespace: operatorNamespace,
-														Name:      workerConfigAnsibleConfigConfigMapName,
+														Namespace:       operatorNamespace,
+														Name:            composerWorkerAPIServiceName,
+														OwnerReferences: []metav1.OwnerReference{ownerReference},
+													},
+													Spec: corev1.ServiceSpec{
+														Type: corev1.ServiceTypeClusterIP,
+														Ports: []corev1.ServicePort{
+															{
+																Name:       composerWorkerAPIPortName,
+																Port:       443,
+																Protocol:   "TCP",
+																TargetPort: workerAPIExternalPort,
+															},
+														},
+														Selector: map[string]string{
+															"app": "osbuild-composer",
+														},
 													},
 												}
-											)
-
-											BeforeEach(func() {
-												configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(&workerConfigAnsibleConfigConfigMap, nil)
 											})
 
-											It("Should return an error if failed to get the configMap for the ansible config ", func() {
+											It("Should return an error if failed to get the worker api service", func() {
 												// given
-												configMapRepository.EXPECT().Read(requestContext, workerConfigPlaybookConfigMapName, operatorNamespace).Return(nil, errFailed)
+												serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errFailed)
 												// when
 												result, err := reconciler.Reconcile(requestContext, request)
 												// then
@@ -813,14 +815,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												Expect(result).To(Equal(resultRequeue))
 											})
 
-											Context("ConfigMap for configuration playbook not found", func() {
+											Context("Worker API Service not found", func() {
 												BeforeEach(func() {
-													configMapRepository.EXPECT().Read(requestContext, workerConfigPlaybookConfigMapName, operatorNamespace).Return(nil, errNotFound)
+													serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
 												})
 
-												It("Should return an error if failed to create the configMap for the playbook for the worker configuration job", func() {
+												It("Should return an error if failed to create the worker api service", func() {
 													// given
-													configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+													serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(errFailed)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
@@ -828,9 +830,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													Expect(result).To(Equal(resultRequeue))
 												})
 
-												It("Should return requeue if succeeded to create the configMap for the playbook for the worker configuration job", func() {
+												It("Should return requeue if the worker api service was created", func() {
 													// given
-													configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+													serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(nil)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
@@ -839,27 +841,18 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												})
 											})
 
-											Context("ConfigMap for configuration playbook exists", func() {
+											Context("Worker API Service exists", func() {
 												const (
-													workerOSBuildWorkerConfigConfigMapName = "osbuild-worker-config"
-												)
-
-												var (
-													workerConfigPlaybookConfigMap = corev1.ConfigMap{
-														ObjectMeta: metav1.ObjectMeta{
-															Namespace: operatorNamespace,
-															Name:      workerConfigPlaybookConfigMapName,
-														},
-													}
+													workerConfigAnsibleConfigConfigMapName = "osbuild-worker-setup-ansible-config"
 												)
 
 												BeforeEach(func() {
-													configMapRepository.EXPECT().Read(requestContext, workerConfigPlaybookConfigMapName, operatorNamespace).Return(&workerConfigPlaybookConfigMap, nil)
+													serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(&composerWorkerAPIService, nil)
 												})
 
-												It("Should return an error if failed to get the configMap for the osbuild-worker config", func() {
+												It("Should return an error if failed to get the configMap for the ansible config ", func() {
 													// given
-													configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
+													configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
@@ -867,12 +860,12 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													Expect(result).To(Equal(resultRequeue))
 												})
 
-												Context("ConfigMap for osbuild-worker config not found", func() {
+												Context("ConfigMap for configuration ansible config not found", func() {
 													BeforeEach(func() {
-														configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
+														configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
 													})
 
-													It("Should return an error if failed to create the configMap for the osbuild-worker config", func() {
+													It("Should return an error if failed to create the configMap for the ansible config for the worker configuration job", func() {
 														// given
 														configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 														// when
@@ -882,7 +875,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 														Expect(result).To(Equal(resultRequeue))
 													})
 
-													It("Should return requeue if succeeded to create the configMap for the osbuild-worker config", func() {
+													It("Should return requeue if succeeded to create the configMap for the ansible config for the worker configuration job", func() {
 														// given
 														configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 														// when
@@ -893,26 +886,81 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													})
 												})
 
-												Context("ConfigMap for the osbuild-worker config exists", func() {
+												Context("ConfigMap for the ansible config exists", func() {
+													const (
+														workerOSBuildWorkerConfigConfigMapName = "osbuild-worker-config"
+													)
+
 													var (
-														workerOSBuildWorkerConfigConfigMap = corev1.ConfigMap{
+														workerConfigAnsibleConfigConfigMap = corev1.ConfigMap{
 															ObjectMeta: metav1.ObjectMeta{
 																Namespace: operatorNamespace,
-																Name:      workerOSBuildWorkerConfigConfigMapName,
+																Name:      workerConfigAnsibleConfigConfigMapName,
 															},
 														}
 													)
 
 													BeforeEach(func() {
-														configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(&workerOSBuildWorkerConfigConfigMap, nil)
+														configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(&workerConfigAnsibleConfigConfigMap, nil)
 													})
 
-													It("Should return Done", func() {
+													It("Should return an error if failed to get the configMap for the osbuild-worker config", func() {
+														// given
+														configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
 														// when
 														result, err := reconciler.Reconcile(requestContext, request)
 														// then
-														Expect(err).To(BeNil())
-														Expect(result).To(Equal(resultDone))
+														Expect(err).To(Equal(errFailed))
+														Expect(result).To(Equal(resultRequeue))
+													})
+
+													Context("ConfigMap for osbuild-worker config not found", func() {
+														BeforeEach(func() {
+															configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
+														})
+
+														It("Should return an error if failed to create the configMap for the osbuild-worker config", func() {
+															// given
+															configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+															// when
+															result, err := reconciler.Reconcile(requestContext, request)
+															// then
+															Expect(err).To(Equal(errFailed))
+															Expect(result).To(Equal(resultRequeue))
+														})
+
+														It("Should return requeue if succeeded to create the configMap for the osbuild-worker config", func() {
+															// given
+															configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+															// when
+															result, err := reconciler.Reconcile(requestContext, request)
+															// then
+															Expect(err).To(BeNil())
+															Expect(result).To(Equal(resultRequeue))
+														})
+													})
+
+													Context("ConfigMap for the osbuild-worker config exists", func() {
+														var (
+															workerOSBuildWorkerConfigConfigMap = corev1.ConfigMap{
+																ObjectMeta: metav1.ObjectMeta{
+																	Namespace: operatorNamespace,
+																	Name:      workerOSBuildWorkerConfigConfigMapName,
+																},
+															}
+														)
+
+														BeforeEach(func() {
+															configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(&workerOSBuildWorkerConfigConfigMap, nil)
+														})
+
+														It("Should return Done", func() {
+															// when
+															result, err := reconciler.Reconcile(requestContext, request)
+															// then
+															Expect(err).To(BeNil())
+															Expect(result).To(Equal(resultDone))
+														})
 													})
 												})
 											})

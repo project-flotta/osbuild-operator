@@ -13,6 +13,12 @@ spec:
     vmWorkerConfig:
       architecture: x86_64
       imageURL: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.6-x86_64-kvm.qcow2"
+  - name: builder-2
+    externalWorkerConfig:
+      address: $EXTERNAL_WORKER_IP
+      user: cloud-user
+      sshKeySecretReference:
+        name: external-builder-ssh-pair
   redHatCredsSecretReference:
     name: redhat-portal-credentials
   s3Service:

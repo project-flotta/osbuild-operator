@@ -1,0 +1,94 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  annotations:
+    description: OSBuild Worker
+    name.os.template.kubevirt.io/rhel8.5: "Red Hat Enterprise Linux 8.0 or higher"
+  labels:
+    app: osbuild-worker
+    workload.template.kubevirt.io/server: "true"
+    os.template.kubevirt.io/rhel8.5: "true"
+  name: external-builder
+spec:
+  dataVolumeTemplates:
+  - apiVersion: cdi.kubevirt.io/v1alpha1
+    kind: DataVolume
+    metadata:
+      creationTimestamp: null
+      name: external-builder-rootdisk
+    spec:
+      pvc:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 100Gi
+          volumeMode: Filesystem
+      source:
+        http:
+          url: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.6-x86_64-kvm.qcow2"
+  runStrategy: Always
+  template:
+    metadata:
+      labels:
+        app: osbuild-worker
+        kubevirt.io/domain: osbuild-worker
+        vm.kubevirt.io/name: osbuild-worker
+        workload.template.kubevirt.io/server: "true"
+        os.template.kubevirt.io/rhel8.5: 'true'
+        osbuild-worker: external-builder
+    spec:
+      domain:
+        cpu:
+          cores: 4
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+          - bootOrder: 1
+            disk:
+              bus: virtio
+            name: rootdisk
+          - disk:
+              bus: virtio
+            name: cloudinitdisk
+          - disk:
+              bus: virtio
+            name: ssh-keys
+            serial: ibsk
+          interfaces:
+          - masquerade: {}
+            model: virtio
+            name: nic-0
+          networkInterfaceMultiqueue: true
+          rng: {}
+        machine:
+          type: pc-q35-rhel8.4.0
+        resources:
+          requests:
+            memory: 8Gi
+      hostname: external-builder
+      networks:
+      - name: nic-0
+        pod: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - dataVolume:
+          name: external-builder-rootdisk
+        name: rootdisk
+      - cloudInitNoCloud:
+          userData: |
+            #cloud-config
+            name: default
+            hostname: external-builder
+            user: cloud-user
+            bootcmd:
+            - "mkdir -p /home/cloud-user/.ssh && chown -R 1000:1000 /home/cloud-user"
+            - "mkdir -p /var/secrets/ssh-keys"
+            - "mount -o overriderockperm,mode=0400,uid=0,gid=0 /dev/disk/by-id/virtio-ibsk /var/secrets/ssh-keys"
+            - "cp /var/secrets/ssh-keys/ssh-publickey /home/cloud-user/.ssh/authorized_keys"
+            - "chmod 644 /home/cloud-user/.ssh/authorized_keys"
+        name: cloudinitdisk
+      - name: ssh-keys
+        secret:
+          secretName: external-builder-ssh-pair
