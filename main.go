@@ -221,7 +221,7 @@ func main() {
 	}
 }
 
-func createClient() (*composer.Client, error) {
+func createClient() (composer.ClientWithResponsesInterface, error) {
 	ca := path.Join(osBuildCertsDir, "ca.crt")
 	tlsCert := path.Join(osBuildCertsDir, "tls.crt")
 	tlsKey := path.Join(osBuildCertsDir, "tls.key")
@@ -253,9 +253,13 @@ func createClient() (*composer.Client, error) {
 		return nil, err
 	}
 
-	return &composer.Client{
+	composerClient := &composer.Client{
 		Server:         fmt.Sprintf(composerFormatServerName, controllers.ComposerComposerAPIServiceName),
 		Client:         httpClient,
 		RequestEditors: nil,
+	}
+
+	return &composer.ClientWithResponses{
+		ClientInterface: composerClient,
 	}, nil
 }

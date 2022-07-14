@@ -1,4 +1,5 @@
 //go:generate go run -mod=mod github.com/deepmap/oapi-codegen/cmd/oapi-codegen -package=composer -old-config-style -generate=types,client -o ../internal/composer/client.go  ../internal/composer/openapi.v2.yml
+//go:generate mockgen -source=../internal/composer/client.go -package=composer -destination=../internal/composer/mock_osbuild_composer.go . ClientWithResponsesInterface
 
 /*
 Copyright 2022.
@@ -41,33 +42,32 @@ const (
 	// Conditions Messages
 	failedToSendPostRequestMsg      = "Failed to post a new composer build request"
 	edgeContainerJobFinishedMsg     = "Edge-container job was finished successfully"
-	edgeContainerJobFailedMsg       = "Edge-container job was failed"
-	edgeContainerJobStillRunningMsg = "Edge-container job is still running"
+	EdgeContainerJobFailedMsg       = "Edge-container job was failed"
+	EdgeContainerJobStillRunningMsg = "Edge-container job is still running"
 
 	// OSBuildConditionTypes values
-	containerBuildDone    = "containerBuildDone"
-	failedContainerBuild  = "failedContainerBuild"
-	startedContainerBuild = "startedContainerBuild"
+	ContainerBuildDone    = "ContainerBuildDone"
+	FailedContainerBuild  = "FailedContainerBuild"
+	StartedContainerBuild = "StartedContainerBuild"
 	isoBuildDone          = "isoBuildDone"
 	failedIsoBuild        = "failedIsoBuild"
 	startedIsoBuild       = "startedIsoBuild"
 
 	// Image types
-	edgeContainerImgType = "edge-container"
-	//edgeInstallerImgType = "edge-installer"
+	EdgeContainerImgType = "edge-container"
 
-	emptyComposeID = ""
+	EmptyComposeID = ""
 	emptyURL       = ""
 
-	requeueForLongDuration  = time.Minute * 2
-	requeueForShortDuration = time.Second * 10
+	RequeueForLongDuration  = time.Minute * 2
+	RequeueForShortDuration = time.Second * 10
 )
 
 // OSBuildReconciler reconciles a OSBuild object
 type OSBuildReconciler struct {
 	Scheme            *runtime.Scheme
 	OSBuildRepository repositoryosbuild.Repository
-	ComposerClient    *composer.Client
+	ComposerClient    composer.ClientWithResponsesInterface
 }
 
 //+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -93,7 +93,7 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, nil
 		}
 		logger.Error(err, fmt.Sprintf("OSBuild %s cannot be retrieve", req.Name))
-		return ctrl.Result{Requeue: true, RequeueAfter: requeueForShortDuration}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForShortDuration}, nil
 	}
 
 	if osBuild.DeletionTimestamp != nil {
@@ -108,49 +108,49 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		lastBuildStatus = osBuild.Status.Conditions[conditionLen-1].Type
 	}
 
-	if osBuild.Status.ContainerComposeId == emptyComposeID {
+	if osBuild.Status.ContainerComposeId == EmptyComposeID {
 		// if the edge container wasn't created yet - schedule a new build
 		logger.Info("create an edge-container")
 		err = r.postComposeEdgeContainer(ctx, logger, osBuild)
 		if err != nil {
 			logger.Error(err, "failed to create an edge-container")
-			return ctrl.Result{Requeue: true, RequeueAfter: requeueForLongDuration}, nil
+			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 		}
 
 		logger.Info("new job created for edge-container, requeue to sample its status")
-		return ctrl.Result{Requeue: true, RequeueAfter: requeueForLongDuration}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 	}
 
-	if lastBuildStatus == startedContainerBuild {
+	if lastBuildStatus == StartedContainerBuild {
 		// if the edge container already created but wasn't finish yet - check the build status
 		logger.Info("update the edge-container's compose ID job status")
 		composeStatus, err := r.updateContainerComposeStatus(ctx, logger, osBuild)
 		if err != nil {
 			logger.Error(err, "failed to get compose ID status")
-			return ctrl.Result{Requeue: true, RequeueAfter: requeueForShortDuration}, nil
+			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForShortDuration}, nil
 		}
 
 		// the build is still in progress - requeue
 		if composeStatus == composer.ComposeStatusValuePending {
 			logger.Info(fmt.Sprintf("the job ID %s, is still in progress", osBuild.Status.ContainerComposeId))
-			return ctrl.Result{Requeue: true, RequeueAfter: requeueForLongDuration}, nil
+			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 		}
 
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if lastBuildStatus == failedContainerBuild {
+	if lastBuildStatus == FailedContainerBuild {
 		logger.Error(fmt.Errorf("failed to build edge container"), "")
 		return ctrl.Result{}, nil
 	}
 
 	// if the build was finished successfully and the target image is edge-container then return
-	if lastBuildStatus == containerBuildDone && osBuild.Spec.Details.TargetImage.TargetImageType == edgeContainerImgType {
+	if lastBuildStatus == ContainerBuildDone && osBuild.Spec.Details.TargetImage.TargetImageType == EdgeContainerImgType {
 		logger.Info(fmt.Sprintf("the job ID %s, Finished", osBuild.Status.ContainerComposeId))
 		return ctrl.Result{}, nil
 	}
 
-	if osBuild.Status.IsoComposeId == emptyComposeID {
+	if osBuild.Status.IsoComposeId == EmptyComposeID {
 		// if the edge installer build wasn't created yet - schedule a new build
 		// TODO postComposeEdgeInstaller - schedule a new build
 		return ctrl.Result{}, nil
@@ -162,13 +162,13 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		composeStatus, err := r.updateIsoComposeStatus(ctx, logger, osBuild)
 		if err != nil {
 			logger.Error(err, "failed to get compose ID status")
-			return ctrl.Result{Requeue: true, RequeueAfter: requeueForShortDuration}, nil
+			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForShortDuration}, nil
 		}
 
 		// the build is still in progress - requeue
 		if composeStatus == composer.ComposeStatusValuePending {
 			logger.Info(fmt.Sprintf("the job ID %s, is still in progress", osBuild.Status.IsoComposeId))
-			return ctrl.Result{Requeue: true, RequeueAfter: requeueForLongDuration}, nil
+			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 		}
 	}
 
@@ -197,7 +197,7 @@ func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, lo
 	status := composeStatus.Status
 	buildUrl := r.getBuildUrl(logger, composeStatus)
 
-	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, containerBuildDone, failedContainerBuild, startedContainerBuild, buildUrl, emptyURL)
+	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, ContainerBuildDone, FailedContainerBuild, StartedContainerBuild, buildUrl, emptyURL)
 	if err != nil {
 		logger.Error(err, "failed to update OSBuild condition status")
 		return "", err
@@ -251,15 +251,15 @@ func (r *OSBuildReconciler) updateOSBuildConditionStatus(ctx context.Context, lo
 	buildStartedValue osbuildv1alpha1.OSBuildConditionType, edgeContainerUrl string, edgeInstallerUrl string) error {
 
 	if composeStatus == composer.ComposeStatusValueSuccess {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFinishedMsg, buildDoneValue, emptyComposeID, emptyComposeID, edgeContainerUrl, edgeInstallerUrl)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFinishedMsg, buildDoneValue, EmptyComposeID, EmptyComposeID, edgeContainerUrl, edgeInstallerUrl)
 	}
 
 	if composeStatus == composer.ComposeStatusValueFailure {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFailedMsg, buildFailedValue, emptyComposeID, emptyComposeID, edgeContainerUrl, edgeInstallerUrl)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobFailedMsg, buildFailedValue, EmptyComposeID, EmptyComposeID, edgeContainerUrl, edgeInstallerUrl)
 	}
 
 	if composeStatus == composer.ComposeStatusValuePending {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobStillRunningMsg, buildStartedValue, emptyComposeID, emptyComposeID, edgeContainerUrl, edgeInstallerUrl)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobStillRunningMsg, buildStartedValue, EmptyComposeID, EmptyComposeID, edgeContainerUrl, edgeInstallerUrl)
 	}
 
 	return nil
@@ -267,7 +267,8 @@ func (r *OSBuildReconciler) updateOSBuildConditionStatus(ctx context.Context, lo
 
 func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) error {
 	customizations := r.createCustomizations(osBuild.Spec.Details.Customizations)
-	imageRequest, err := r.createImageRequest(osBuild.Spec.Details.Distribution, &osBuild.Spec.Details.TargetImage, edgeContainerImgType)
+
+	imageRequest, err := r.createImageRequest(osBuild.Spec.Details.Distribution, &osBuild.Spec.Details.TargetImage, EdgeContainerImgType)
 	if err != nil {
 		return err
 	}
@@ -278,27 +279,24 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 		ImageRequest:   imageRequest,
 	}
 
-	// post compos:
-	response, err := r.ComposerClient.PostCompose(ctx, body)
+	// post compose:
+	composerResponse, err := r.ComposerClient.PostComposeWithResponse(ctx, body)
 	if err != nil {
 		logger.Error(err, "failed to post a new request")
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, failedContainerBuild, emptyComposeID, emptyComposeID, emptyURL, emptyURL)
+
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, FailedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
 		return err
 	}
 
-	composerResponse, err := composer.ParsePostComposeResponse(response)
-	if err != nil {
-		logger.Error(err, "failed parsing the response of postCompose")
-		return err
-	}
 	if composerResponse.StatusCode() != http.StatusCreated {
 		errorMsg := fmt.Sprintf("postCompose request failed for OSBuild %s, with status code %v, and body %s", osBuild.Name, composerResponse.StatusCode(), string(composerResponse.Body))
 		err = fmt.Errorf(errorMsg)
 		logger.Error(err, "postCompose request failed")
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, failedContainerBuild, emptyComposeID, emptyComposeID, emptyURL, emptyURL)
+
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, FailedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
@@ -306,20 +304,20 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 	}
 
 	containerComposeId := composerResponse.JSON201.Id.String()
-	logger.Info("postComposer request was sent and trigger a new compose ID %s", containerComposeId)
+	logger.Info("postComposer request was sent and trigger a new compose ID ", "container compose ID: ", containerComposeId)
 
-	return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobStillRunningMsg, startedContainerBuild, containerComposeId, emptyComposeID, emptyURL, emptyURL)
+	return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobStillRunningMsg, StartedContainerBuild, containerComposeId, EmptyComposeID, emptyURL, emptyURL)
 }
 
 func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild,
 	msg string, conditionType osbuildv1alpha1.OSBuildConditionType, containerComposeId string, isoComposeId string,
 	edgeContainerUrl string, edgeInstallerUrl string) error {
 	patch := client.MergeFrom(osBuild.DeepCopy())
-	if containerComposeId != emptyComposeID {
+	if containerComposeId != EmptyComposeID {
 		osBuild.Status.ContainerComposeId = containerComposeId
 	}
 
-	if isoComposeId != emptyComposeID {
+	if isoComposeId != EmptyComposeID {
 		osBuild.Status.IsoComposeId = isoComposeId
 	}
 
@@ -359,18 +357,16 @@ func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr
 }
 
 func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger logr.Logger, composeID string) (*composer.ComposeStatus, error) {
-	response, err := r.ComposerClient.GetComposeStatus(ctx, composeID)
+	composerResponse, err := r.ComposerClient.GetComposeStatusWithResponse(ctx, composeID, nil)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("failed to get compose ID %s status", composeID))
 		return nil, err
 	}
-	composerResponse, err := composer.ParseGetComposeStatusResponse(response)
-	if err != nil {
-		logger.Error(err, "failed to parse getCompose response")
-		return nil, err
-	}
+
 	if composerResponse.JSON200 != nil {
+		logger.Info(fmt.Sprintf("Image building status %v", composerResponse.JSON200.ImageStatus))
 		return composerResponse.JSON200, nil
+
 	}
 	return nil, fmt.Errorf("something went wrong with requesting the composeID %v", composerResponse.StatusCode())
 }
