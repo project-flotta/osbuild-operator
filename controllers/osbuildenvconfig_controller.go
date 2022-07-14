@@ -40,6 +40,8 @@ import (
 
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
+	routev1 "github.com/openshift/api/route/v1"
+
 	"github.com/go-logr/logr"
 
 	osbuildv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
@@ -49,6 +51,7 @@ import (
 	"github.com/project-flotta/osbuild-operator/internal/repository/deployment"
 	"github.com/project-flotta/osbuild-operator/internal/repository/job"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildenvconfig"
+	"github.com/project-flotta/osbuild-operator/internal/repository/route"
 	"github.com/project-flotta/osbuild-operator/internal/repository/secret"
 	"github.com/project-flotta/osbuild-operator/internal/repository/service"
 	"github.com/project-flotta/osbuild-operator/internal/repository/virtualmachine"
@@ -67,6 +70,8 @@ const (
 	composerComposerAPIPortName    = "composer-api"
 	composerWorkerAPIServiceName   = "osbuild-worker"
 	composerWorkerAPIPortName      = "worker-api"
+
+	composerWorkerAPIRouteName = "osbuild-worker"
 
 	certificateSecretCACrtKey = "ca.crt"
 	certificateSecretCrtKey   = "tls.crt"
@@ -106,9 +111,9 @@ const (
 
 	workerCertificateNameFormat = "worker-%s-cert"
 
-	workerSetupPlaybookConfigMapName = "osbuild-worker-setup-playbook"
-	workerSetupPlaybookConfigMapKey  = "playbook.yaml"
-	workerSetupPlaybookTemplateFile  = "worker-config-ansible-playbook.yaml"
+	workerSetupPlaybookConfigMapNameFormat = "worker-%s-setup-playbook"
+	workerSetupPlaybookConfigMapKey        = "playbook.yaml"
+	workerSetupPlaybookTemplateFile        = "worker-config-ansible-playbook.yaml"
 
 	workerRPMRepoDistribution      = "rhel-8-cdn"
 	workerRHCredentialsDir         = "/var/secrets/redhat-portal-credentials" // #nosec G101
@@ -192,7 +197,7 @@ type workerSetupPlaybookParameters struct {
 	RHCredentialsUsernameKey               string
 	RHCredentialsPasswordKey               string
 	OSBuildWorkerCertsDir                  string
-	ComposerWorkerAPIServiceName           string
+	WorkerAPIAddress                       string
 	OSBuildWorkerConfigDir                 string
 	OSBuildWorkerConfigFile                string
 	OSBuildWorkerS3CredsFile               string
@@ -265,6 +270,7 @@ type OSBuildEnvConfigReconciler struct {
 	JobRepository              job.Repository
 	ServiceRepository          service.Repository
 	SecretRepository           secret.Repository
+	RouteRepository            route.Repository
 	VirtualmachineRepository   virtualmachine.Repository
 }
 
@@ -273,6 +279,7 @@ type OSBuildEnvConfigReconciler struct {
 //+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildenvconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
@@ -336,14 +343,29 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	created, err = r.ensureComposerExists(ctx, reqLogger, instance)
+	created, err = r.ensureComposerWorkerAPIRouteExists(ctx, instance)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, err
+	} else if created {
+		reqLogger.Info("Generated Route for the Composer's Worker API")
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	composerWorkerAPIRouteHost, err := r.getComposerWorkerAPIRouteHost(ctx)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, err
+	} else if composerWorkerAPIRouteHost == nil {
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
+	}
+
+	created, err = r.ensureComposerExists(ctx, reqLogger, instance, *composerWorkerAPIRouteHost)
 	if err != nil {
 		return ctrl.Result{Requeue: true}, err
 	} else if created {
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	created, err = r.ensureWorkersExists(ctx, reqLogger, instance)
+	created, err = r.ensureWorkersExists(ctx, reqLogger, instance, *composerWorkerAPIRouteHost)
 	if err != nil {
 		return ctrl.Result{Requeue: true}, err
 	} else if created {
@@ -353,7 +375,7 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 	return ctrl.Result{}, nil
 }
 
-func (r *OSBuildEnvConfigReconciler) ensureComposerExists(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
+func (r *OSBuildEnvConfigReconciler) ensureComposerExists(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, composerWorkerAPIRouteHost string) (bool, error) {
 	created, err := r.ensureCertificateExists(
 		ctx,
 		reqLogger,
@@ -362,6 +384,7 @@ func (r *OSBuildEnvConfigReconciler) ensureComposerExists(ctx context.Context, r
 		[]string{
 			ComposerComposerAPIServiceName,
 			composerWorkerAPIServiceName,
+			composerWorkerAPIRouteHost,
 		},
 	)
 	if err != nil {
@@ -446,20 +469,12 @@ func (r *OSBuildEnvConfigReconciler) ensureComposerExists(ctx context.Context, r
 	return false, nil
 }
 
-func (r *OSBuildEnvConfigReconciler) ensureWorkersExists(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
+func (r *OSBuildEnvConfigReconciler) ensureWorkersExists(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, composerWorkerAPIRouteHost string) (bool, error) {
 	created, err := r.ensureWorkerConfigAnsibleConfigExists(ctx, instance)
 	if err != nil {
 		return false, err
 	} else if created {
 		reqLogger.Info("Generated ConfigMap for Ansible Config")
-		return true, nil
-	}
-
-	created, err = r.ensureWorkerConfigPlaybookExists(ctx, instance)
-	if err != nil {
-		return false, err
-	} else if created {
-		reqLogger.Info("Generated ConfigMap for Ansible Playbook")
 		return true, nil
 	}
 
@@ -472,7 +487,7 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkersExists(ctx context.Context, re
 	}
 
 	for i := range instance.Spec.Workers {
-		created, err = r.ensureWorkerExists(ctx, reqLogger, instance, &instance.Spec.Workers[i])
+		created, err = r.ensureWorkerExists(ctx, reqLogger, instance, &instance.Spec.Workers[i], composerWorkerAPIRouteHost)
 		if err != nil {
 			return false, err
 		} else if created {
@@ -483,10 +498,11 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkersExists(ctx context.Context, re
 	return false, nil
 }
 
-func (r *OSBuildEnvConfigReconciler) ensureWorkerExists(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, worker *osbuildv1alpha1.WorkerConfig) (bool, error) {
+func (r *OSBuildEnvConfigReconciler) ensureWorkerExists(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, worker *osbuildv1alpha1.WorkerConfig, composerWorkerAPIRouteHost string) (bool, error) {
 	var workerAddress string
 	var workerUser string
 	var workerSSHKeySecretName string
+	var workerAPIAddress string
 
 	if worker.VMWorkerConfig != nil {
 		created, err := r.ensureWorkerSSHKeysSecretExists(ctx, instance)
@@ -525,10 +541,12 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerExists(ctx context.Context, req
 		workerAddress = fmt.Sprintf(workerSSHServiceNameFormat, worker.Name)
 		workerUser = workerVMUsername
 		workerSSHKeySecretName = workerSSHKeysSecretName
+		workerAPIAddress = composerWorkerAPIServiceName
 	} else {
 		workerAddress = worker.ExternalWorkerConfig.Address
 		workerUser = worker.ExternalWorkerConfig.User
 		workerSSHKeySecretName = worker.ExternalWorkerConfig.SSHKeySecretReference.Name
+		workerAPIAddress = composerWorkerAPIRouteHost
 	}
 
 	created, err := r.ensureWorkerCertificateExists(ctx, reqLogger, instance, worker.Name)
@@ -536,6 +554,14 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerExists(ctx context.Context, req
 		return false, err
 	} else if created {
 		reqLogger.Info("Generated Certificate for Worker", "name", worker.Name)
+		return true, nil
+	}
+
+	created, err = r.ensureWorkerConfigPlaybookExists(ctx, instance, worker.Name, workerAPIAddress)
+	if err != nil {
+		return false, err
+	} else if created {
+		reqLogger.Info("Generated ConfigMap for Ansible Playbook for Worker", "name", worker.Name)
 		return true, nil
 	}
 
@@ -770,6 +796,68 @@ func (r *OSBuildEnvConfigReconciler) generateService(serviceName, portName strin
 	return service, controllerutil.SetControllerReference(instance, service, r.Scheme)
 }
 
+func (r *OSBuildEnvConfigReconciler) ensureComposerWorkerAPIRouteExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
+	_, err := r.RouteRepository.Read(ctx, composerWorkerAPIRouteName, conf.GlobalConf.WorkingNamespace)
+	if err == nil {
+		return false, nil
+	}
+
+	if errors.IsNotFound(err) {
+		route, err := r.generateComposerWorkerAPIRoute(instance)
+		if err != nil {
+			return false, err
+		}
+
+		err = r.RouteRepository.Create(ctx, route)
+		if err != nil {
+			return false, err
+		}
+
+		return true, nil
+	}
+
+	return false, err
+}
+
+func (r *OSBuildEnvConfigReconciler) generateComposerWorkerAPIRoute(instance *osbuildv1alpha1.OSBuildEnvConfig) (*routev1.Route, error) {
+	route := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      composerWorkerAPIRouteName,
+			Namespace: conf.GlobalConf.WorkingNamespace,
+		},
+		Spec: routev1.RouteSpec{
+			To: routev1.RouteTargetReference{
+				Kind: "Service",
+				Name: composerWorkerAPIServiceName,
+			},
+			TLS: &routev1.TLSConfig{
+				Termination: routev1.TLSTerminationPassthrough,
+			},
+		},
+	}
+	return route, controllerutil.SetControllerReference(instance, route, r.Scheme)
+}
+
+func (r *OSBuildEnvConfigReconciler) getComposerWorkerAPIRouteHost(ctx context.Context) (*string, error) {
+	route, err := r.RouteRepository.Read(ctx, composerWorkerAPIRouteName, conf.GlobalConf.WorkingNamespace)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(route.Status.Ingress) == 0 {
+		return nil, nil
+	}
+
+	ingress := &route.Status.Ingress[0]
+	for _, condition := range ingress.Conditions {
+		if condition.Type == routev1.RouteAdmitted && condition.Status == corev1.ConditionTrue {
+			return &ingress.Host, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func (r *OSBuildEnvConfigReconciler) ensureWorkerSSHKeysSecretExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
 	_, err := r.SecretRepository.Read(ctx, workerSSHKeysSecretName, conf.GlobalConf.WorkingNamespace)
 	if err == nil {
@@ -867,7 +955,7 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerCertificateExists(ctx context.C
 	return r.ensureCertificateExists(ctx, reqLogger, instance, fmt.Sprintf(workerCertificateNameFormat, workerName), []string{workerName})
 }
 
-func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigPlaybookExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
+func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigPlaybookExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig, workerName, workerAPIAddress string) (bool, error) {
 	workerSetupPlaybookParams := workerSetupPlaybookParameters{
 		RPMRepoDistribution:                    workerRPMRepoDistribution,
 		OSBuildComposerTag:                     conf.GlobalConf.WorkerOSBuildComposerVersion,
@@ -876,7 +964,7 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigPlaybookExists(ctx contex
 		RHCredentialsUsernameKey:               workerRHCredentialsUsernameKey,
 		RHCredentialsPasswordKey:               workerRHCredentialsPasswordKey,
 		OSBuildWorkerCertsDir:                  workerOSBuildWorkerCertsDir,
-		ComposerWorkerAPIServiceName:           composerWorkerAPIServiceName,
+		WorkerAPIAddress:                       workerAPIAddress,
 		OSBuildWorkerConfigDir:                 workerOSBuildWorkerConfigDir,
 		OSBuildWorkerConfigFile:                workerOSBuildWorkerConfigConfigMapKey,
 		OSBuildWorkerS3CredsFile:               workerOSBuildWorkerConfigS3CredentialsFile,
@@ -887,7 +975,7 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigPlaybookExists(ctx contex
 		OSBuildWorkerS3CABundleDir:             workerOSBuildWorkerS3CABundleDir,
 		OSBuildWorkerS3CABundleKey:             workerOSBuildWorkerS3CABundleKey,
 	}
-	return r.ensureConfigMapForTemplateFileExists(ctx, workerSetupPlaybookConfigMapName, workerSetupPlaybookConfigMapKey, workerSetupPlaybookTemplateFile, workerSetupPlaybookParams, instance)
+	return r.ensureConfigMapForTemplateFileExists(ctx, fmt.Sprintf(workerSetupPlaybookConfigMapNameFormat, workerName), workerSetupPlaybookConfigMapKey, workerSetupPlaybookTemplateFile, workerSetupPlaybookParams, instance)
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigAnsibleConfigExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
@@ -964,7 +1052,7 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerSetupJob(workerName, workerSS
 		OSBuildWorkerCertsDir:                  workerOSBuildWorkerCertsDir,
 		WorkerSSHKeysSecretName:                workerSSHKeySecretName,
 		WorkerConfigAnsibleConfigConfigMapName: workerSetupAnsibleConfigConfigMapName,
-		WorkerConfigPlaybookConfigMapName:      workerSetupPlaybookConfigMapName,
+		WorkerConfigPlaybookConfigMapName:      fmt.Sprintf(workerSetupPlaybookConfigMapNameFormat, workerName),
 		WorkerConfigInventoryConfigMapName:     fmt.Sprintf(workerSetupInventoryConfigMapNameFormat, workerName),
 		RedHatCredsSecretName:                  instance.Spec.RedHatCredsSecretReference.Name,
 		WorkerCertificateName:                  fmt.Sprintf(workerCertificateNameFormat, workerName),

@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -38,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
@@ -54,6 +56,7 @@ import (
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfigtemplate"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildenvconfig"
+	"github.com/project-flotta/osbuild-operator/internal/repository/route"
 	"github.com/project-flotta/osbuild-operator/internal/repository/secret"
 	"github.com/project-flotta/osbuild-operator/internal/repository/service"
 	"github.com/project-flotta/osbuild-operator/internal/repository/virtualmachine"
@@ -78,6 +81,8 @@ func init() {
 	utilruntime.Must(certmanagerv1.AddToScheme(scheme))
 
 	utilruntime.Must(kubevirtv1.AddToScheme(scheme))
+
+	utilruntime.Must(routev1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -131,6 +136,7 @@ func main() {
 	jobRepository := job.NewJobRepository(mgr.GetClient())
 	serviceRepository := service.NewServiceRepository(mgr.GetClient())
 	secretRepository := secret.NewSecretRepository(mgr.GetClient())
+	routeRepository := route.NewRouteRepository(mgr.GetClient())
 	virtualMachineRepository := virtualmachine.NewVirtualMachineRepository(mgr.GetClient())
 
 	osBuildCRCreator := manifests.NewOSBuildCRCreator(osBuildConfigRepository, osBuildRepository, scheme, osBuildConfigTemplateRepository, configMapRepository)
@@ -176,6 +182,7 @@ func main() {
 		JobRepository:              jobRepository,
 		ServiceRepository:          serviceRepository,
 		SecretRepository:           secretRepository,
+		RouteRepository:            routeRepository,
 		VirtualmachineRepository:   virtualMachineRepository,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildEnvConfig")

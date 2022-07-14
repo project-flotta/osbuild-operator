@@ -38,3 +38,5 @@ private.key
 public.crt
 
 .vscode/
+
+config/creating_env/ssh-*

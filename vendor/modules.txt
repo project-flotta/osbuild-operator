@@ -236,6 +236,7 @@ github.com/onsi/gomega/types
 # github.com/openshift/api v3.9.0+incompatible
 ## explicit
 github.com/openshift/api/build/v1
+github.com/openshift/api/route/v1
 # github.com/openshift/custom-resource-status v1.1.2
 ## explicit; go 1.12
 github.com/openshift/custom-resource-status/conditions/v1
