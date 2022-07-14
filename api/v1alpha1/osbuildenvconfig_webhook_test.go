@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
@@ -38,10 +40,12 @@ var _ = Describe("OSBuildEnvConfig Webhook", func() {
 				},
 				Workers: []WorkerConfig{
 					{
-						Name: "worker-1",
+						Name:           "worker-1",
+						VMWorkerConfig: &VMWorkerConfig{},
 					},
 					{
-						Name: "worker-2",
+						Name:                 "worker-2",
+						ExternalWorkerConfig: &ExternalWorkerConfig{},
 					},
 				},
 			},
@@ -94,6 +98,28 @@ var _ = Describe("OSBuildEnvConfig Webhook", func() {
 			err := osbuildEnvConfig.ValidateCreate()
 			// then
 			Expect(err).To(Equal(workerNamesNotUnique))
+		})
+
+		It("Should fail if neither VMWorkerConfig not ExternalWorkerConfig are set", func() {
+			// given
+			kClient = clientBuilder.Build()
+			worker := &osbuildEnvConfig.Spec.Workers[0]
+			worker.VMWorkerConfig = nil
+			// when
+			err := osbuildEnvConfig.ValidateCreate()
+			// then
+			Expect(err.Error()).To(Equal(fmt.Sprintf(noWorkerConfigFormat, worker.Name)))
+		})
+
+		It("Should fail if both VMWorkerConfig and ExternalWorkerConfig are set", func() {
+			// given
+			kClient = clientBuilder.Build()
+			worker := &osbuildEnvConfig.Spec.Workers[0]
+			worker.ExternalWorkerConfig = &ExternalWorkerConfig{}
+			// when
+			err := osbuildEnvConfig.ValidateCreate()
+			// then
+			Expect(err.Error()).To(Equal(fmt.Sprintf(duplicateWorkerConfigFormat, worker.Name)))
 		})
 	})
 

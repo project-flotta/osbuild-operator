@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,6 +50,11 @@ var (
 	generalWebhookFailure = osBuildEnvConfigError{
 		error: "webhook check encountered an error",
 	}
+)
+
+const (
+	noWorkerConfigFormat        = "worker %s has neither VMWorkerConfig nor ExternalWorkerConfig set. At least one must be set"
+	duplicateWorkerConfigFormat = "worker %s has both VMWorkerConfig and ExternalWorkerConfig set. Only one should be set"
 )
 
 // log is for logging in this package.
@@ -89,7 +95,7 @@ func (r *OSBuildEnvConfig) ValidateCreate() error {
 		return err
 	}
 
-	err = validateUniqueWorkerNames(r.Spec.Workers)
+	err = validateWorkers(r.Spec.Workers)
 	if err != nil {
 		return err
 	}
@@ -112,9 +118,15 @@ func validateSingleton() error {
 	return nil
 }
 
-func validateUniqueWorkerNames(workers []WorkerConfig) error {
+func validateWorkers(workers []WorkerConfig) error {
 	workerNames := make(map[string]struct{})
 	for _, worker := range workers {
+		if worker.VMWorkerConfig == nil && worker.ExternalWorkerConfig == nil {
+			return osBuildEnvConfigError{error: fmt.Sprintf(noWorkerConfigFormat, worker.Name)}
+		}
+		if worker.VMWorkerConfig != nil && worker.ExternalWorkerConfig != nil {
+			return osBuildEnvConfigError{error: fmt.Sprintf(duplicateWorkerConfigFormat, worker.Name)}
+		}
 		if _, exists := workerNames[worker.Name]; exists {
 			return workerNamesNotUnique
 		}
