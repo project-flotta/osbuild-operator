@@ -17,7 +17,6 @@ require (
 
 require (
 	github.com/golang-jwt/jwt/v4 v4.0.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/pborman/uuid v1.2.0 // indirect
 	kubevirt.io/containerized-data-importer-api v1.50.0 // indirect
@@ -106,5 +105,6 @@ require (
 
 require (
 	github.com/go-logr/logr v1.2.3
+	github.com/google/uuid v1.3.0
 	kubevirt.io/api v0.55.0
 )
