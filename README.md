@@ -61,7 +61,8 @@ Please note that the provisioning of the OSBuild Operator will also provision th
   ```
 - Login to Nexus
   ```bash
-  oc get secret -n osbuild nexus-osbuild-admin-credentials -o jsonpath={.data.password} | base64 -d | xargs nexus3 login --url https://nexus-osbuild-osbuild.apps.my-cluster.example.com --no-x509_verify --username admin --password
+  export CLUSTER_DOMAIN='mycluster.example.com'
+  oc get secret -n osbuild nexus-osbuild-admin-credentials -o jsonpath={.data.password} | base64 -d | xargs nexus3 login --url https://nexus-osbuild-osbuild.apps.${CLUSTER_DOMAIN} --no-x509_verify --username admin --password
   ```
 - Create a Hosted Raw repository named _disk-images_
   ```bash
@@ -79,7 +80,8 @@ Please note that the provisioning of the OSBuild Operator will also provision th
   ```
 - Create a bucket name `osbuild-images`. You can use the `aws` cli:
   ```bash
-  AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin aws --endpoint-url https://minio-s3-osbuild.apps.my-cluster.example.com --no-verify-ssl s3 mb s3://osbuild-images
+  export CLUSTER_DOMAIN='mycluster.example.com'
+  AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin aws --endpoint-url https://minio-s3-osbuild.apps.${CLUSTER_DOMAIN} --no-verify-ssl s3 mb s3://osbuild-images
   ```
 - Create a secret
   ```bash
@@ -89,7 +91,7 @@ Please note that the provisioning of the OSBuild Operator will also provision th
 ## Create Secret for RedHat Credentials
 - Find your RH creds and create a secret:
   ```bash
-  oc create secret generic redhat-portal-credentials --from-literal=username=<USERNAME> --from-literal=password=<PASSWORD>
+  oc create secret generic redhat-portal-credentials -n osbuild --from-literal=username=<USERNAME> --from-literal=password=<PASSWORD>
   ```
 
 ## Create PSQL Server
