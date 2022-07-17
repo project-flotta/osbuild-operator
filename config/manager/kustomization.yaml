@@ -8,3 +8,48 @@ configMapGenerator:
 - name: manager-config
   envs:
   - controller_manager_config.properties
+- name: default-repos-centos-8
+  files:
+  - repositories/centos-8.json
+- name: default-repos-centos-9
+  files:
+  - repositories/centos-9.json
+- name: default-repos-centos-stream-8
+  files:
+  - repositories/centos-stream-8.json
+- name: default-repos-centos-stream-9
+  files:
+  - repositories/centos-stream-9.json
+- name: default-repos-fedora-34
+  files:
+  - repositories/fedora-34.json
+- name: default-repos-fedora-35
+  files:
+  - repositories/fedora-35.json
+- name: default-repos-fedora-36
+  files:
+  - repositories/fedora-36.json
+- name: default-repos-rhel-84
+  files:
+  - repositories/rhel-84.json
+- name: default-repos-rhel-85
+  files:
+  - repositories/rhel-85.json
+- name: default-repos-rhel-86
+  files:
+  - repositories/rhel-86.json
+- name: default-repos-rhel-87
+  files:
+  - repositories/rhel-87.json
+- name: default-repos-rhel-8-beta
+  files:
+  - repositories/rhel-8-beta.json
+- name: default-repos-rhel-8
+  files:
+  - repositories/rhel-8.json
+- name: default-repos-rhel-90
+  files:
+  - repositories/rhel-90.json
+- name: default-repos-rhel-91
+  files:
+  - repositories/rhel-91.json
