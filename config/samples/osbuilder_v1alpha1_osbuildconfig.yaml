@@ -7,13 +7,11 @@ spec:
     distribution: rhel-86
     customizations:
       packages:
-        - node_exporter
-        - ansible
+        - postgresql
     targetImage:
       architecture: x86_64
       targetImageType: edge-container
       osTree:
-        url: "https://hostedimagesserver.flotta.io/"
         ref: "rhel/8/x86_64/edge"
   template:
     osBuildConfigTemplateRef: osbuildconfigtemplate-sample
