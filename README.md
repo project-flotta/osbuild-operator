@@ -83,9 +83,14 @@ Please note that the provisioning of the OSBuild Operator will also provision th
   export CLUSTER_DOMAIN='mycluster.example.com'
   AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin aws --endpoint-url https://minio-s3-osbuild.apps.${CLUSTER_DOMAIN} --no-verify-ssl s3 mb s3://osbuild-images
   ```
-- Create a secret
+- Create a secret for the S3 credentials
   ```bash
   oc create secret generic osbuild-s3-credentials -n osbuild --from-literal=access-key-id=minioadmin --from-literal=secret-access-key=minioadmin
+  ```
+- Create a secret for the CA Bundle using the OCP route
+  ```bash
+  oc get secrets -n openshift-ingress-operator router-ca -o "jsonpath={.data.tls\.crt}" | base64 -d > /tmp/ca-bundle
+  oc create secret generic osbuild-s3-ca-bundle -n osbuild --from-file=/tmp/ca-bundle
   ```
 
 ## Create Secret for RedHat Credentials
@@ -110,7 +115,8 @@ Currently the controller does not support creating the PSQL server on its own, m
 ## Create OSBuildEnvConfig singleton CR
 - Apply OSBuildEnvConfig
   ```bash
-  oc create -f config/samples/osbuilder_v1alpha1_osbuildenvconfig.yaml
+  export CLUSTER_DOMAIN='mycluster.example.com'
+  cat config/samples/osbuilder_v1alpha1_osbuildenvconfig.yaml | envsubst | oc apply -f -
   ```
 
 ## SSH into osbuild-workers
