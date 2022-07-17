@@ -69,10 +69,45 @@ spec:
         - mountPath: /etc/osbuild/certs
           name: operator-cert
           readOnly: true
+        - mountPath: /etc/osbuild/repositories
+          name: repositories
       volumes:
       - name: operator-cert
         secret:
           defaultMode: 420
           secretName: operator-cert
+      - name: repositories
+        projected:
+          sources:
+          - configMap:
+              name: default-repos-centos-8
+          - configMap:
+              name: default-repos-centos-9
+          - configMap:
+              name: default-repos-centos-stream-8
+          - configMap:
+              name: default-repos-centos-stream-9
+          - configMap:
+              name: default-repos-fedora-34
+          - configMap:
+              name: default-repos-fedora-35
+          - configMap:
+              name: default-repos-fedora-36
+          - configMap:
+              name: default-repos-rhel-84
+          - configMap:
+              name: default-repos-rhel-85
+          - configMap:
+              name: default-repos-rhel-86
+          - configMap:
+              name: default-repos-rhel-87
+          - configMap:
+              name: default-repos-rhel-8-beta
+          - configMap:
+              name: default-repos-rhel-8
+          - configMap:
+              name: default-repos-rhel-90
+          - configMap:
+              name: default-repos-rhel-91
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
