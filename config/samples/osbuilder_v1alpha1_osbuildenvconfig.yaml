@@ -23,5 +23,5 @@ spec:
         name: osbuild-s3-ca-bundle
       region: us-east-1
       bucket: osbuild-images
-      endpoint: "http://minio:9000"
+      endpoint: "https://minio-s3-osbuild.apps.$CLUSTER_DOMAIN"
 
