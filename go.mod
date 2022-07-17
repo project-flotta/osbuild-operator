@@ -20,7 +20,7 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/pborman/uuid v1.2.0 // indirect
-	kubevirt.io/containerized-data-importer-api v1.47.0 // indirect
+	kubevirt.io/containerized-data-importer-api v1.50.0 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 	sigs.k8s.io/gateway-api v0.4.1 // indirect
 )
@@ -106,5 +106,5 @@ require (
 
 require (
 	github.com/go-logr/logr v1.2.3
-	kubevirt.io/api v0.54.0
+	kubevirt.io/api v0.55.0
 )
