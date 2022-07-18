@@ -23,8 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -63,8 +61,6 @@ const (
 
 	requeueForLongDuration  = time.Minute * 2
 	requeueForShortDuration = time.Second * 10
-
-	repositoriesDir = "/etc/osbuild/repositories"
 )
 
 // OSBuildReconciler reconciles a OSBuild object
@@ -379,49 +375,29 @@ func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger log
 	return nil, fmt.Errorf("something went wrong with requesting the composeID %v", composerResponse.StatusCode())
 }
 
-func (r *OSBuildReconciler) buildRepositories(distribution string, arch osbuildv1alpha1.Architecture) ([]composer.Repository, error) {
-	reposJsonPath := path.Join(repositoriesDir, fmt.Sprintf("%s.json", distribution))
-
-	reposJson, err := os.ReadFile(reposJsonPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []composer.Repository{}, nil
-		}
-		return nil, err
-	}
-
-	var archsMap map[string][]composer.Repository
-	err = json.Unmarshal([]byte(reposJson), &archsMap)
-	if err != nil {
-		return nil, err
-	}
-
-	archRepos, ok := archsMap[string(arch)]
-	if !ok {
-		return []composer.Repository{}, nil
-	}
-
-	return archRepos, nil
-}
-
 func (r *OSBuildReconciler) createImageRequest(distribution string, targetImage *osbuildv1alpha1.TargetImage, targetImageType osbuildv1alpha1.TargetImageType) (*composer.ImageRequest, error) {
 	uploadOptions := composer.UploadOptions(composer.AWSS3UploadOptions{Region: ""})
-
-	repositories, err := r.buildRepositories(distribution, targetImage.Architecture)
-	if err != nil {
-		return nil, err
-	}
 
 	// TODO[ECOPROJECT-902]- add repositories to OSBuildConfig and OSBuildConfigTemplate types
 	imageRequest := composer.ImageRequest{
 		Architecture:  string(targetImage.Architecture),
 		ImageType:     composer.ImageTypes(targetImageType),
 		UploadOptions: &uploadOptions,
-		Repositories:  repositories,
 	}
+
+	if targetImage.Repositories != nil {
+		var repos []composer.Repository
+		for _, osbuildRepo := range *targetImage.Repositories {
+			composerRepo := osbuildRepo.DeepCopy()
+			repos = append(repos, (composer.Repository)(*composerRepo))
+		}
+		imageRequest.Repositories = repos
+	}
+
 	if targetImage.OSTree != nil {
 		imageRequest.Ostree = (*composer.OSTree)(targetImage.OSTree.DeepCopy())
 	}
+
 	return &imageRequest, nil
 }
 

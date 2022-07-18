@@ -114,6 +114,37 @@ spec:
                             description: Url is the Url of the target build (Optional)
                             type: string
                         type: object
+                      repositorys:
+                        description: Repositories is the list of additional custom
+                          RPM repositories to use when building the image (optional)
+                        items:
+                          description: Repository defines the RPM Repository details.
+                          properties:
+                            baseurl:
+                              type: string
+                            check_gpg:
+                              type: boolean
+                            gpgkey:
+                              description: GPG key used to sign packages in this repository.
+                              type: string
+                            ignore_ssl:
+                              type: boolean
+                            metalink:
+                              type: string
+                            mirrorlist:
+                              type: string
+                            package_sets:
+                              description: Naming package sets for a repository assigns
+                                it to a specific part (pipeline) of the build process.
+                              items:
+                                type: string
+                              type: array
+                            rhsm:
+                              description: Determines whether a valid subscription
+                                is required to access this repository.
+                              type: boolean
+                          type: object
+                        type: array
                       targetImageType:
                         description: ImageType defines the target image type
                         enum:

@@ -97,6 +97,8 @@ type TargetImage struct {
 	TargetImageType TargetImageType `json:"targetImageType"`
 	// OSTree is the OSTree configuration of the build (optional)
 	OSTree *OSTreeConfig `json:"osTree,omitempty"`
+	// Repositories is the list of additional custom RPM repositories to use when building the image (optional)
+	Repositories *[]Repository `json:"repositorys,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=x86_64;aarch64
@@ -113,6 +115,25 @@ type OSTreeConfig struct {
 	Ref *string `json:"ref,omitempty"`
 	// Url is the Url of the target build (Optional)
 	Url *string `json:"url,omitempty"`
+}
+
+// Repository defines the RPM Repository details.
+type Repository struct {
+	Baseurl  *string `json:"baseurl,omitempty"`
+	CheckGpg *bool   `json:"check_gpg,omitempty"`
+
+	// GPG key used to sign packages in this repository.
+	Gpgkey     *string `json:"gpgkey,omitempty"`
+	IgnoreSsl  *bool   `json:"ignore_ssl,omitempty"`
+	Metalink   *string `json:"metalink,omitempty"`
+	Mirrorlist *string `json:"mirrorlist,omitempty"`
+
+	// Naming package sets for a repository assigns it to a specific part
+	// (pipeline) of the build process.
+	PackageSets *[]string `json:"package_sets,omitempty"`
+
+	// Determines whether a valid subscription is required to access this repository.
+	Rhsm *bool `json:"rhsm,omitempty"`
 }
 
 type BuildTriggers struct {

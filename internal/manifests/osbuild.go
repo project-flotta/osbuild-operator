@@ -2,7 +2,10 @@ package manifests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path"
 
 	_ "github.com/golang/mock/mockgen/model"
 	corev1 "k8s.io/api/core/v1"
@@ -16,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	osbuildv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/internal/conf"
 	"github.com/project-flotta/osbuild-operator/internal/customizations"
 	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
 	repositoryosbuild "github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
@@ -73,6 +77,12 @@ func (o *OSBuildCreator) Create(ctx context.Context, osBuildConfig *osbuildv1alp
 	}
 
 	osBuildConfigSpecDetails := osBuildConfig.Spec.Details.DeepCopy()
+	err := mergeRepositories(osBuildConfigSpecDetails)
+	if err != nil {
+		logger.Error(err, "failed to merge repositories list")
+		return err
+	}
+
 	kickstartConfigMap, osConfigTemplate, err := o.applyTemplate(ctx, osBuildConfig, osBuildConfigSpecDetails, osBuildName, osBuild)
 	if err != nil {
 		logger.Error(err, "cannot apply template to osBuild")
@@ -117,6 +127,45 @@ func (o *OSBuildCreator) Create(ctx context.Context, osBuildConfig *osbuildv1alp
 	logger.Info("A new OSBuild CR was created", "OSBuild", osBuild.Name)
 
 	return nil
+}
+
+func mergeRepositories(osBuildConfigSpecDetails *osbuildv1alpha1.BuildDetails) error {
+	repos, err := getDefaultRepositories(osBuildConfigSpecDetails.Distribution, osBuildConfigSpecDetails.TargetImage.Architecture)
+	if err != nil {
+		return nil
+	}
+
+	if osBuildConfigSpecDetails.TargetImage.Repositories != nil {
+		repos = append(repos, *osBuildConfigSpecDetails.TargetImage.Repositories...)
+	}
+
+	osBuildConfigSpecDetails.TargetImage.Repositories = &repos
+	return nil
+}
+
+func getDefaultRepositories(distribution string, arch osbuildv1alpha1.Architecture) ([]osbuildv1alpha1.Repository, error) {
+	reposJsonPath := path.Join(conf.GlobalConf.RepositoriesDir, fmt.Sprintf("%s.json", distribution))
+
+	reposJson, err := os.ReadFile(reposJsonPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []osbuildv1alpha1.Repository{}, nil
+		}
+		return nil, err
+	}
+
+	var archsMap map[string][]osbuildv1alpha1.Repository
+	err = json.Unmarshal([]byte(reposJson), &archsMap)
+	if err != nil {
+		return nil, err
+	}
+
+	archRepos, ok := archsMap[string(arch)]
+	if !ok {
+		return []osbuildv1alpha1.Repository{}, nil
+	}
+
+	return archRepos, nil
 }
 
 func (o *OSBuildCreator) applyTemplate(ctx context.Context, osBuildConfig *osbuildv1alpha1.OSBuildConfig, osBuildConfigSpecDetails *osbuildv1alpha1.BuildDetails, osBuildName string, osBuild *osbuildv1alpha1.OSBuild) (*corev1.ConfigMap, *osbuildv1alpha1.OSBuildConfigTemplate, error) {
