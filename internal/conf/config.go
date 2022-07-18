@@ -58,6 +58,9 @@ type OperatorConfig struct {
 
 	// WorkerOSBuildVersion is the release tag of OSBuild for the osbuild RPM
 	WorkerOSBuildVersion string `envconfig:"WORKER_OSBUILD_VERSION" default:"v59"`
+
+	// RepositoriesDir is the path to the directory where the repositories information files are stored
+	RepositoriesDir string `envconfig:"REPOSITORIES_DIR" default:"/etc/osbuild/repositories"`
 }
 
 var GlobalConf *OperatorConfig

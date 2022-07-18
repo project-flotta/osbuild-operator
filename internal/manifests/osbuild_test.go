@@ -3,6 +3,7 @@ package manifests_test
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
@@ -17,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
+	"github.com/project-flotta/osbuild-operator/internal/conf"
 	"github.com/project-flotta/osbuild-operator/internal/manifests"
 	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
@@ -27,6 +29,9 @@ import (
 
 var _ = Describe("OSBuild creation", func() {
 	const (
+		operatorNamespace = "osbuild"
+		caIssuerName      = "osbuild-issuer"
+
 		OSBuildConfigName = "osbuild-cfg"
 	)
 	var (
@@ -46,6 +51,11 @@ var _ = Describe("OSBuild creation", func() {
 	)
 
 	BeforeEach(func() {
+		os.Setenv("WORKING_NAMESPACE", operatorNamespace)
+		os.Setenv("CA_ISSUER_NAME", caIssuerName)
+		err := conf.Load()
+		Expect(err).To(BeNil())
+
 		scheme = runtime.NewScheme()
 		utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 		utilruntime.Must(v1alpha1.AddToScheme(scheme))
@@ -76,17 +86,20 @@ var _ = Describe("OSBuild creation", func() {
 			Status: v1alpha1.OSBuildConfigStatus{},
 		}
 
+		expectedOSBuildSpecDetails := osBuildConfig.Spec.Details.DeepCopy()
+		expectedOSBuildSpecDetails.TargetImage.Repositories = &[]v1alpha1.Repository{}
+
 		expectedOSBuild = v1alpha1.OSBuild{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      configName(OSBuildConfigName, 1),
 				Namespace: osBuildConfig.Namespace,
 			},
 			Spec: v1alpha1.OSBuildSpec{
-				Details:     osBuildConfig.Spec.Details,
+				Details:     *expectedOSBuildSpecDetails,
 				TriggeredBy: "UpdateCR",
 			},
 		}
-		err := controllerutil.SetControllerReference(&osBuildConfig, &expectedOSBuild, scheme)
+		err = controllerutil.SetControllerReference(&osBuildConfig, &expectedOSBuild, scheme)
 		Expect(err).ToNot(HaveOccurred())
 
 		mockCtrl = gomock.NewController(GinkgoT())
