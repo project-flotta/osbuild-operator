@@ -58,6 +58,9 @@ type OperatorConfig struct {
 
 	// WorkerOSBuildVersion is the release tag of OSBuild for the osbuild RPM
 	WorkerOSBuildVersion string `envconfig:"WORKER_OSBUILD_VERSION" default:"v59"`
+
+	// BaseISOContainerImage is the container image to run the iso-package job
+	BaseISOContainerImage string `envconfig:"BASE_ISO_CONTAINER_IMAGE" required:"true" default:"controller:latest"`
 }
 
 var GlobalConf *OperatorConfig
