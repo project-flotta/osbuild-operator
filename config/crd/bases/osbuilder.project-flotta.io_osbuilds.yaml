@@ -187,9 +187,15 @@ spec:
                 description: ComposeId presents compose id that was already started,
                   for tracking a job of edge-container
                 type: string
+              containerUrl:
+                description: ContainerUrl presents the url of the edge-container image
+                type: string
               isoComposeId:
                 description: IsoComposeId presents compose id that was already started,
                   for tracking a job of edge-installe
+                type: string
+              isoUrl:
+                description: IsoUrl presents the url of the edge-installer image
                 type: string
               output:
                 type: string

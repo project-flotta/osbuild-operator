@@ -59,6 +59,14 @@ type OSBuildStatus struct {
 	// IsoComposeId presents compose id that was already started, for tracking a job of edge-installe
 	// +optional
 	IsoComposeId string `json:"isoComposeId,omitempty"`
+
+	// ContainerUrl presents the url of the edge-container image
+	// +optional
+	ContainerUrl string `json:"containerUrl,omitempty"`
+
+	// IsoUrl presents the url of the edge-installer image
+	// +optional
+	IsoUrl string `json:"isoUrl,omitempty"`
 }
 
 type OSBuildCondition struct {
