@@ -59,6 +59,7 @@ const (
 	//edgeInstallerImgType = "edge-installer"
 
 	emptyComposeID = ""
+	emptyURL       = ""
 
 	requeueForLongDuration  = time.Minute * 2
 	requeueForShortDuration = time.Second * 10
@@ -197,12 +198,37 @@ func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, lo
 		return "", err
 	}
 
-	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, composeStatus, containerBuildDone, failedContainerBuild, startedContainerBuild)
+	status := composeStatus.Status
+	buildUrl := r.getBuildUrl(logger, composeStatus)
+
+	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, containerBuildDone, failedContainerBuild, startedContainerBuild, buildUrl, emptyURL)
 	if err != nil {
 		logger.Error(err, "failed to update OSBuild condition status")
 		return "", err
 	}
-	return composeStatus, nil
+	return status, nil
+}
+
+func (r *OSBuildReconciler) getBuildUrl(logger logr.Logger, composeStatus *composer.ComposeStatus) string {
+	if composeStatus.ImageStatus.UploadStatus == nil {
+		logger.Info("field uploadStatus is nil")
+		return emptyURL
+	}
+
+	jsonUploadStatus, err := json.Marshal(composeStatus.ImageStatus.UploadStatus.Options)
+	if err != nil {
+		logger.Error(err, "cannot marshal the field `Options`")
+		return emptyURL
+	}
+
+	var awsS3UploadStatus composer.AWSS3UploadStatus
+	err = json.Unmarshal(jsonUploadStatus, &awsS3UploadStatus)
+	if err != nil {
+		logger.Error(err, "cannot convert the field `Options` to type AWSS3UploadStatus")
+		return emptyURL
+	}
+
+	return awsS3UploadStatus.Url
 }
 
 func (r *OSBuildReconciler) updateIsoComposeStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (composer.ComposeStatusValue, error) {
@@ -212,29 +238,32 @@ func (r *OSBuildReconciler) updateIsoComposeStatus(ctx context.Context, logger l
 		return "", err
 	}
 
-	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, composeStatus, isoBuildDone, failedIsoBuild, startedIsoBuild)
+	status := composeStatus.Status
+	buildUrl := r.getBuildUrl(logger, composeStatus)
+
+	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, isoBuildDone, failedIsoBuild, startedIsoBuild, emptyURL, buildUrl)
 	if err != nil {
 		logger.Error(err, "failed to update OSBuild condition status")
 		return "", err
 	}
-	return composeStatus, nil
+	return status, nil
 }
 
 func (r *OSBuildReconciler) updateOSBuildConditionStatus(ctx context.Context, logger logr.Logger,
 	osBuild *osbuildv1alpha1.OSBuild, composeStatus composer.ComposeStatusValue,
 	buildDoneValue osbuildv1alpha1.OSBuildConditionType, buildFailedValue osbuildv1alpha1.OSBuildConditionType,
-	buildStartedValue osbuildv1alpha1.OSBuildConditionType) error {
+	buildStartedValue osbuildv1alpha1.OSBuildConditionType, edgeContainerUrl string, edgeInstallerUrl string) error {
 
 	if composeStatus == composer.ComposeStatusValueSuccess {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFinishedMsg, buildDoneValue, emptyComposeID, emptyComposeID)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFinishedMsg, buildDoneValue, emptyComposeID, emptyComposeID, edgeContainerUrl, edgeInstallerUrl)
 	}
 
 	if composeStatus == composer.ComposeStatusValueFailure {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFailedMsg, buildFailedValue, emptyComposeID, emptyComposeID)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFailedMsg, buildFailedValue, emptyComposeID, emptyComposeID, edgeContainerUrl, edgeInstallerUrl)
 	}
 
 	if composeStatus == composer.ComposeStatusValuePending {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobStillRunningMsg, buildStartedValue, emptyComposeID, emptyComposeID)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobStillRunningMsg, buildStartedValue, emptyComposeID, emptyComposeID, edgeContainerUrl, edgeInstallerUrl)
 	}
 
 	return nil
@@ -257,7 +286,7 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 	response, err := r.ComposerClient.PostCompose(ctx, body)
 	if err != nil {
 		logger.Error(err, "failed to post a new request")
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, failedContainerBuild, emptyComposeID, emptyComposeID)
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, failedContainerBuild, emptyComposeID, emptyComposeID, emptyURL, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
@@ -273,7 +302,7 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 		errorMsg := fmt.Sprintf("postCompose request failed for OSBuild %s, with status code %v, and body %s", osBuild.Name, composerResponse.StatusCode(), string(composerResponse.Body))
 		err = fmt.Errorf(errorMsg)
 		logger.Error(err, "postCompose request failed")
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, failedContainerBuild, emptyComposeID, emptyComposeID)
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, failedContainerBuild, emptyComposeID, emptyComposeID, emptyURL, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
@@ -283,11 +312,12 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 	containerComposeId := composerResponse.JSON201.Id.String()
 	logger.Info("postComposer request was sent and trigger a new compose ID %s", containerComposeId)
 
-	return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobStillRunningMsg, startedContainerBuild, containerComposeId, emptyComposeID)
+	return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobStillRunningMsg, startedContainerBuild, containerComposeId, emptyComposeID, emptyURL, emptyURL)
 }
 
 func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild,
-	msg string, conditionType osbuildv1alpha1.OSBuildConditionType, containerComposeId string, isoComposeId string) error {
+	msg string, conditionType osbuildv1alpha1.OSBuildConditionType, containerComposeId string, isoComposeId string,
+	edgeContainerUrl string, edgeInstallerUrl string) error {
 	patch := client.MergeFrom(osBuild.DeepCopy())
 	if containerComposeId != emptyComposeID {
 		osBuild.Status.ContainerComposeId = containerComposeId
@@ -295,6 +325,14 @@ func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr
 
 	if isoComposeId != emptyComposeID {
 		osBuild.Status.IsoComposeId = isoComposeId
+	}
+
+	if edgeContainerUrl != emptyURL {
+		osBuild.Status.ContainerUrl = edgeContainerUrl
+	}
+
+	if edgeInstallerUrl != emptyURL {
+		osBuild.Status.IsoUrl = edgeInstallerUrl
 	}
 
 	if osBuild.Status.Conditions == nil {
@@ -324,21 +362,21 @@ func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr
 	return nil
 }
 
-func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger logr.Logger, composeID string) (composer.ComposeStatusValue, error) {
+func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger logr.Logger, composeID string) (*composer.ComposeStatus, error) {
 	response, err := r.ComposerClient.GetComposeStatus(ctx, composeID)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("failed to get compose ID %s status", composeID))
-		return "", err
+		return nil, err
 	}
 	composerResponse, err := composer.ParseGetComposeStatusResponse(response)
 	if err != nil {
 		logger.Error(err, "failed to parse getCompose response")
-		return "", err
+		return nil, err
 	}
 	if composerResponse.JSON200 != nil {
-		return composerResponse.JSON200.Status, nil
+		return composerResponse.JSON200, nil
 	}
-	return "", fmt.Errorf("something went wrong with requesting the composeID %v", composerResponse.StatusCode())
+	return nil, fmt.Errorf("something went wrong with requesting the composeID %v", composerResponse.StatusCode())
 }
 
 func (r *OSBuildReconciler) buildRepositories(distribution string, arch osbuildv1alpha1.Architecture) ([]composer.Repository, error) {
