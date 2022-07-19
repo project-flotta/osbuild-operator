@@ -97,11 +97,11 @@ type ExternalWorkerConfig struct {
 	// User is the user to connect with to external worker machine
 	// +kubebuilder:validation:Required
 	User string `json:"user"`
-	// RedHatCredsSecretReference is a reference to a secret in the same namespace,
+	// SSHKeySecretReference is a reference to a secret in the same namespace,
 	// containing the private key that may be used to connect to the external worker machine
 	// the expected key is ssh-privatekey
 	// +kubebuilder:validation:Required
-	SSHKeySecretReference buildv1.SecretLocalReference `json:"redHatCredsSecretReference"`
+	SSHKeySecretReference buildv1.SecretLocalReference `json:"sshKeySecretReference"`
 }
 
 type S3ServiceConfig struct {
