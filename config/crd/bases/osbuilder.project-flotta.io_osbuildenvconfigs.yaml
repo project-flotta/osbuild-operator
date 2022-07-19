@@ -181,11 +181,11 @@ spec:
                           description: Address is the hostname or IP address of the
                             external worker machine
                           type: string
-                        redHatCredsSecretReference:
-                          description: RedHatCredsSecretReference is a reference to
-                            a secret in the same namespace, containing the private
-                            key that may be used to connect to the external worker
-                            machine the expected key is ssh-privatekey
+                        sshKeySecretReference:
+                          description: SSHKeySecretReference is a reference to a secret
+                            in the same namespace, containing the private key that
+                            may be used to connect to the external worker machine
+                            the expected key is ssh-privatekey
                           properties:
                             name:
                               description: Name is the name of the resource in the
@@ -200,7 +200,7 @@ spec:
                           type: string
                       required:
                       - address
-                      - redHatCredsSecretReference
+                      - sshKeySecretReference
                       - user
                       type: object
                     name:
