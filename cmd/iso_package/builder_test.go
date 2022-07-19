@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kdomanski/iso9660/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -126,7 +127,8 @@ func IsoServer() (*http.Server, int) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	Expect(err).NotTo(HaveOccurred())
 	srv := &http.Server{
-		Handler: mux,
+		ReadHeaderTimeout: time.Minute,
+		Handler:           mux,
 	}
 	go func() {
 		err = srv.Serve(l)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -70,8 +71,9 @@ func main() {
 
 	h := restapi.Handler(osbuildconfiginternal.NewOSBuildConfigHandler(osBuildConfigRepository, secretRepository, osBuildCRCreator))
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%v", httpapi.GlobalHttpAPIConf.HttpPort),
-		Handler: h,
+		Addr:              fmt.Sprintf(":%v", httpapi.GlobalHttpAPIConf.HttpPort),
+		ReadHeaderTimeout: time.Minute,
+		Handler:           h,
 	}
 	go func() {
 		logger.Info("Starting listening to OSBuildConfigHandler server")
