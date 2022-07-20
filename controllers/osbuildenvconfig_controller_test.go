@@ -88,8 +88,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			},
 		}
 
-		resultRequeue = ctrl.Result{Requeue: true}
-		resultDone    = ctrl.Result{}
+		resultRequeue      = ctrl.Result{Requeue: true}
+		resultQuickRequeue = ctrl.Result{RequeueAfter: time.Second}
+		resultDone         = ctrl.Result{}
 	)
 
 	BeforeEach(func() {
@@ -292,7 +293,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 				result, err := reconciler.Reconcile(requestContext, request)
 				// then
 				Expect(err).To(BeNil())
-				Expect(result).To(Equal(resultRequeue))
+				Expect(result).To(Equal(resultQuickRequeue))
 			})
 		})
 
@@ -362,7 +363,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 					result, err := reconciler.Reconcile(requestContext, request)
 					// then
 					Expect(err).To(BeNil())
-					Expect(result).To(Equal(resultRequeue))
+					Expect(result).To(Equal(resultQuickRequeue))
 				})
 			})
 
@@ -478,7 +479,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
 						Expect(err).To(BeNil())
-						Expect(result).To(Equal(resultRequeue))
+						Expect(result).To(Equal(resultQuickRequeue))
 					})
 
 					Context("Composer Certificate is already created", func() {
@@ -538,7 +539,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 								result, err := reconciler.Reconcile(requestContext, request)
 								// then
 								Expect(err).To(BeNil())
-								Expect(result).To(Equal(resultRequeue))
+								Expect(result).To(Equal(resultQuickRequeue))
 							})
 						})
 
@@ -603,7 +604,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 									result, err := reconciler.Reconcile(requestContext, request)
 									// then
 									Expect(err).To(BeNil())
-									Expect(result).To(Equal(resultRequeue))
+									Expect(result).To(Equal(resultQuickRequeue))
 								})
 
 								Context("ConfigMap for the Composer configuration exists", func() {
@@ -652,7 +653,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										result, err := reconciler.Reconcile(requestContext, request)
 										// then
 										Expect(err).To(BeNil())
-										Expect(result).To(Equal(resultRequeue))
+										Expect(result).To(Equal(resultQuickRequeue))
 									})
 
 									Context("ConfigMap for the Proxy configuration exists", func() {
@@ -704,7 +705,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												result, err := reconciler.Reconcile(requestContext, request)
 												// then
 												Expect(err).To(BeNil())
-												Expect(result).To(Equal(resultRequeue))
+												Expect(result).To(Equal(resultQuickRequeue))
 											})
 										})
 
@@ -783,7 +784,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
 													Expect(err).To(BeNil())
-													Expect(result).To(Equal(resultRequeue))
+													Expect(result).To(Equal(resultQuickRequeue))
 												})
 											})
 
@@ -856,7 +857,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 														result, err := reconciler.Reconcile(requestContext, request)
 														// then
 														Expect(err).To(BeNil())
-														Expect(result).To(Equal(resultRequeue))
+														Expect(result).To(Equal(resultQuickRequeue))
 													})
 												})
 
@@ -901,7 +902,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 															result, err := reconciler.Reconcile(requestContext, request)
 															// then
 															Expect(err).To(BeNil())
-															Expect(result).To(Equal(resultRequeue))
+															Expect(result).To(Equal(resultQuickRequeue))
 														})
 													})
 
@@ -955,7 +956,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																result, err := reconciler.Reconcile(requestContext, request)
 																// then
 																Expect(err).To(BeNil())
-																Expect(result).To(Equal(resultRequeue))
+																Expect(result).To(Equal(resultQuickRequeue))
 															})
 														})
 
