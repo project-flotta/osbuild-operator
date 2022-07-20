@@ -394,6 +394,14 @@ func (r *OSBuildEnvConfigReconciler) ensureComposerExists(ctx context.Context, r
 		return true, nil
 	}
 
+	updated, err := r.ensureSecretOwnedByInstance(ctx, reqLogger, instance, composerCertificateName)
+	if err != nil {
+		return false, err
+	} else if updated {
+		reqLogger.Info("Updated owner reference for the composer certificate secret", "secretName", composerCertificateName)
+		return true, nil
+	}
+
 	composerDeploymentParams := composerDeploymentParameters{
 		ComposerDeploymentNamespace:      conf.GlobalConf.WorkingNamespace,
 		ComposerDeploymentName:           composerDeploymentName,
@@ -557,6 +565,14 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerExists(ctx context.Context, req
 		return true, nil
 	}
 
+	updated, err := r.ensureWorkerCertificateSecretOwnedByInstance(ctx, reqLogger, instance, worker.Name)
+	if err != nil {
+		return false, err
+	} else if updated {
+		reqLogger.Info("Updated owner reference for worker certificate secret", "name", worker.Name)
+		return true, nil
+	}
+
 	created, err = r.ensureWorkerConfigPlaybookExists(ctx, instance, worker.Name, workerAPIAddress)
 	if err != nil {
 		return false, err
@@ -632,6 +648,36 @@ func (r *OSBuildEnvConfigReconciler) generateCertificate(ctx context.Context, in
 	}
 
 	return certificate, controllerutil.SetControllerReference(instance, certificate, r.Scheme)
+}
+
+func (r *OSBuildEnvConfigReconciler) ensureWorkerCertificateSecretOwnedByInstance(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, workerName string) (bool, error) {
+	return r.ensureSecretOwnedByInstance(ctx, reqLogger, instance, fmt.Sprintf(workerCertificateNameFormat, workerName))
+}
+
+func (r *OSBuildEnvConfigReconciler) ensureSecretOwnedByInstance(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, secretName string) (bool, error) {
+	secret, err := r.SecretRepository.Read(ctx, secretName, conf.GlobalConf.WorkingNamespace)
+	if err != nil {
+		return false, err
+	}
+
+	if len(secret.ObjectMeta.OwnerReferences) > 0 {
+		// Do not check who is the owner since the cert-manager may be configured to own its secrets
+		// In that case, the secret will be deleted with the certificate and the osbuildenvconfig doesn't need to own it
+		return false, nil
+	}
+
+	oldSecret := secret.DeepCopy()
+	err = controllerutil.SetControllerReference(instance, secret, r.Scheme)
+	if err != nil {
+		return false, err
+	}
+
+	err = r.SecretRepository.Patch(ctx, oldSecret, secret)
+	if err != nil {
+		return false, err
+	}
+
+	return true, err
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureComposerConfigMapExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
@@ -1107,28 +1153,7 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerSetupJob(workerName, workerSS
 }
 
 func (r *OSBuildEnvConfigReconciler) Finalize(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig) (ctrl.Result, error) {
-	// By default, cert-manager does not delete the secret is creates when the certificate is deleted so need to delete it manually
-	deleted, err := r.ensureComposerCertSecretDeleted(ctx)
-	if err != nil {
-		return ctrl.Result{Requeue: true}, err
-	}
-	if deleted {
-		reqLogger.Info("composer certificate secret was deleted")
-		return ctrl.Result{Requeue: true}, nil
-	}
-
-	for _, worker := range instance.Spec.Workers {
-		deleted, err = r.ensureWorkerCertSecretDeleted(ctx, worker.Name)
-		if err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		if deleted {
-			reqLogger.Info("Deleted certificate secret for", "worker", worker.Name)
-			return ctrl.Result{Requeue: true}, nil
-		}
-	}
-
-	err = r.removeFinalizer(ctx, reqLogger, instance)
+	err := r.removeFinalizer(ctx, reqLogger, instance)
 	if err != nil {
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -1142,31 +1167,6 @@ func (r *OSBuildEnvConfigReconciler) addFinalizer(ctx context.Context, instance 
 	oldInstance := instance.DeepCopy()
 	controllerutil.AddFinalizer(instance, osBuildOperatorFinalizer)
 	return true, r.OSBuildEnvConfigRepository.Patch(ctx, oldInstance, instance)
-}
-
-func (r *OSBuildEnvConfigReconciler) ensureComposerCertSecretDeleted(ctx context.Context) (bool, error) {
-	return r.ensureSecretDeleted(ctx, composerCertificateName)
-}
-
-func (r *OSBuildEnvConfigReconciler) ensureWorkerCertSecretDeleted(ctx context.Context, workerName string) (bool, error) {
-	return r.ensureSecretDeleted(ctx, fmt.Sprintf(workerCertificateNameFormat, workerName))
-}
-
-func (r *OSBuildEnvConfigReconciler) ensureSecretDeleted(ctx context.Context, secretName string) (bool, error) {
-	secret, err := r.SecretRepository.Read(ctx, secretName, conf.GlobalConf.WorkingNamespace)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	err = r.SecretRepository.Delete(ctx, secret)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 func (r *OSBuildEnvConfigReconciler) removeFinalizer(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig) error {
