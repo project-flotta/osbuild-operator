@@ -125,6 +125,8 @@ const (
 	workerSetupAnsibleConfigConfigMapKey  = "ansible.cfg"
 	workerSetupAnsibleConfigTemplateFile  = "worker-config-ansible-config.cfg"
 
+	workerSetupAnsibleConfigSSHRetries = 5
+
 	workerSetupInventoryConfigMapNameFormat = "worker-%s-inventory"
 	workerSetupInventoryConfigMapKey        = "inventory.yaml"
 	workerSetupInventoryTemplateFile        = "worker-config-ansible-inventory.yaml"
@@ -148,6 +150,10 @@ const (
 	workerSetupJobTemplateFile = "worker-setup-job.yaml"
 
 	workerSetupJobNameFormat = "worker-%s-setup"
+)
+
+var (
+	resultQuickRequeue = ctrl.Result{RequeueAfter: time.Second}
 )
 
 type composerConfigParametersKoji struct {
@@ -187,6 +193,10 @@ type composerDeploymentParameters struct {
 	ComposerCertsSecretCACertKey     string
 	ProxyConfigMapName               string
 	ProxyWorkerAPIUpstreamTimeout    string
+}
+
+type workerSetupAnsibleConfigParameters struct {
+	SSHRetries int
 }
 
 type workerSetupPlaybookParameters struct {
@@ -340,7 +350,7 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 		return ctrl.Result{Requeue: true}, err
 	} else if created {
 		reqLogger.Info("Added finalizer")
-		return ctrl.Result{Requeue: true}, nil
+		return resultQuickRequeue, nil
 	}
 
 	created, err = r.ensureComposerWorkerAPIRouteExists(ctx, instance)
@@ -348,7 +358,7 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 		return ctrl.Result{Requeue: true}, err
 	} else if created {
 		reqLogger.Info("Generated Route for the Composer's Worker API")
-		return ctrl.Result{Requeue: true}, nil
+		return resultQuickRequeue, nil
 	}
 
 	composerWorkerAPIRouteHost, err := r.getComposerWorkerAPIRouteHost(ctx)
@@ -362,14 +372,14 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 	if err != nil {
 		return ctrl.Result{Requeue: true}, err
 	} else if created {
-		return ctrl.Result{Requeue: true}, nil
+		return resultQuickRequeue, nil
 	}
 
 	created, err = r.ensureWorkersExists(ctx, reqLogger, instance, *composerWorkerAPIRouteHost)
 	if err != nil {
 		return ctrl.Result{Requeue: true}, err
 	} else if created {
-		return ctrl.Result{Requeue: true}, nil
+		return resultQuickRequeue, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -1025,7 +1035,10 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigPlaybookExists(ctx contex
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigAnsibleConfigExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
-	return r.ensureConfigMapForTemplateFileExists(ctx, workerSetupAnsibleConfigConfigMapName, workerSetupAnsibleConfigConfigMapKey, workerSetupAnsibleConfigTemplateFile, nil, instance)
+	workerSetupAnsibleConfigParams := workerSetupAnsibleConfigParameters{
+		SSHRetries: workerSetupAnsibleConfigSSHRetries,
+	}
+	return r.ensureConfigMapForTemplateFileExists(ctx, workerSetupAnsibleConfigConfigMapName, workerSetupAnsibleConfigConfigMapKey, workerSetupAnsibleConfigTemplateFile, workerSetupAnsibleConfigParams, instance)
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigInventoryExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig, workerName, workerAddress, workerUser string) (bool, error) {
