@@ -12,6 +12,7 @@ type Repository interface {
 	Read(ctx context.Context, name string, namespace string) (*corev1.Secret, error)
 	Create(ctx context.Context, secret *corev1.Secret) error
 	Delete(ctx context.Context, secret *corev1.Secret) error
+	Patch(ctx context.Context, old, new *corev1.Secret) error
 }
 
 type CRRepository struct {
@@ -34,4 +35,9 @@ func (r *CRRepository) Create(ctx context.Context, secret *corev1.Secret) error 
 
 func (r *CRRepository) Delete(ctx context.Context, secret *corev1.Secret) error {
 	return r.client.Delete(ctx, secret)
+}
+
+func (r *CRRepository) Patch(ctx context.Context, old, new *corev1.Secret) error {
+	patch := client.MergeFrom(old)
+	return r.client.Patch(ctx, new, patch)
 }
