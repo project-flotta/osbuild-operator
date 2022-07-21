@@ -60,6 +60,7 @@ import (
 	"github.com/project-flotta/osbuild-operator/internal/repository/secret"
 	"github.com/project-flotta/osbuild-operator/internal/repository/service"
 	"github.com/project-flotta/osbuild-operator/internal/repository/virtualmachine"
+	"github.com/project-flotta/osbuild-operator/internal/sshkey"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -138,6 +139,7 @@ func main() {
 	secretRepository := secret.NewSecretRepository(mgr.GetClient())
 	routeRepository := route.NewRouteRepository(mgr.GetClient())
 	virtualMachineRepository := virtualmachine.NewVirtualMachineRepository(mgr.GetClient())
+	sshkeyGenerator := sshkey.NewSSHKeyGenerator()
 
 	osBuildCRCreator := manifests.NewOSBuildCRCreator(osBuildConfigRepository, osBuildRepository, scheme, osBuildConfigTemplateRepository, configMapRepository)
 
@@ -183,7 +185,8 @@ func main() {
 		ServiceRepository:          serviceRepository,
 		SecretRepository:           secretRepository,
 		RouteRepository:            routeRepository,
-		VirtualmachineRepository:   virtualMachineRepository,
+		VirtualMachineRepository:   virtualMachineRepository,
+		SSHKeyGenerator:            sshkeyGenerator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildEnvConfig")
 		os.Exit(1)

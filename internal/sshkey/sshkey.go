@@ -13,7 +13,18 @@ const (
 	privateKeyBitSize = 4096
 )
 
-func GenerateSSHKeyPair() ([]byte, []byte, error) {
+//go:generate mockgen -package=sshkey -destination=mock_sshkey.go . SSHKeyGenerator
+type SSHKeyGenerator interface {
+	GenerateSSHKeyPair() ([]byte, []byte, error)
+}
+
+type SSHKeyGeneratorImpl struct{}
+
+func NewSSHKeyGenerator() *SSHKeyGeneratorImpl {
+	return &SSHKeyGeneratorImpl{}
+}
+
+func (s *SSHKeyGeneratorImpl) GenerateSSHKeyPair() ([]byte, []byte, error) {
 	privateKey, err := generatePrivateKey(privateKeyBitSize)
 	if err != nil {
 		return nil, nil, err

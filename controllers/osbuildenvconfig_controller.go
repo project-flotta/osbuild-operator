@@ -281,7 +281,8 @@ type OSBuildEnvConfigReconciler struct {
 	ServiceRepository          service.Repository
 	SecretRepository           secret.Repository
 	RouteRepository            route.Repository
-	VirtualmachineRepository   virtualmachine.Repository
+	VirtualMachineRepository   virtualmachine.Repository
+	SSHKeyGenerator            sshkey.SSHKeyGenerator
 }
 
 //+kubebuilder:rbac:groups=osbuilder.project-flotta.io,resources=osbuildenvconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -921,7 +922,7 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerSSHKeysSecretExists(ctx context
 	}
 
 	if errors.IsNotFound(err) {
-		privateKeyBytes, publicKeyBytes, err := sshkey.GenerateSSHKeyPair()
+		privateKeyBytes, publicKeyBytes, err := r.SSHKeyGenerator.GenerateSSHKeyPair()
 		if err != nil {
 			return false, err
 		}
@@ -959,7 +960,7 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerSSHKeysSecret(instance *osbui
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureWorkerVMExists(ctx context.Context, vmParameters *workerVMParameters, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
-	_, err := r.VirtualmachineRepository.Read(ctx, vmParameters.Name, conf.GlobalConf.WorkingNamespace)
+	_, err := r.VirtualMachineRepository.Read(ctx, vmParameters.Name, conf.GlobalConf.WorkingNamespace)
 	if err == nil {
 		return false, nil
 	}
@@ -970,7 +971,7 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerVMExists(ctx context.Context, v
 			return false, err
 		}
 
-		err = r.VirtualmachineRepository.Create(ctx, workerVm)
+		err = r.VirtualMachineRepository.Create(ctx, workerVm)
 		if err != nil {
 			return false, err
 		}
