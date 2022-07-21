@@ -557,6 +557,14 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerExists(ctx context.Context, req
 			return true, nil
 		}
 
+		ready, err := r.ensureWorkerVMIsReady(ctx, worker.Name)
+		if err != nil {
+			return false, err
+		} else if !ready {
+			reqLogger.Info("Worker VM is not ready yet", "name", worker.Name)
+			return true, nil
+		}
+
 		workerAddress = fmt.Sprintf(workerSSHServiceNameFormat, worker.Name)
 		workerUser = workerVMUsername
 		workerSSHKeySecretName = workerSSHKeysSecretName
@@ -1006,6 +1014,21 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerVM(vmParameters *workerVMPara
 
 func (r *OSBuildEnvConfigReconciler) ensureWorkerVMSSHServiceExists(ctx context.Context, workerName string, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
 	return r.ensureServiceExists(ctx, fmt.Sprintf(workerSSHServiceNameFormat, workerName), workerSSHPortName, 22, 22, map[string]string{"osbuild-worker": workerName}, instance)
+}
+
+func (r *OSBuildEnvConfigReconciler) ensureWorkerVMIsReady(ctx context.Context, workerName string) (bool, error) {
+	vm, err := r.VirtualMachineRepository.Read(ctx, workerName, conf.GlobalConf.WorkingNamespace)
+	if err != nil {
+		return false, err
+	}
+
+	for _, condition := range vm.Status.Conditions {
+		if condition.Type == kubevirtv1.VirtualMachineReady && condition.Status == corev1.ConditionTrue {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (r *OSBuildEnvConfigReconciler) ensureWorkerCertificateExists(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, workerName string) (bool, error) {
