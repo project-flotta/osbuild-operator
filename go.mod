@@ -26,7 +26,7 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go v1.44.59
+	github.com/aws/aws-sdk-go v1.44.60
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )
 
