@@ -94,6 +94,49 @@ Please note that the provisioning of the OSBuild Operator will also provision th
   oc create secret generic osbuild-s3-ca-bundle -n osbuild --from-file=/tmp/ca-bundle
   ```
 
+## Create a Container Registry service
+- Create an HTPasswd file
+  ```bash
+  htpasswd -Bbc /tmp/auth admin <Password>
+  ```
+- Create a secret for the HTPasswd file
+  ```bash
+  oc create secret generic container-registry-auth -n osbuild --from-file=/tmp/auth
+  ```
+- Because docker.io uses rate limiting it is recommanded to use an Image Pull Secret
+  - If you don't have an account at docker.io create one
+  - Create a docker-registry secret with your credentials
+  ```bash
+  oc create secret docker-registry docker-io-creds -n osbuild --docker-server=docker.io --docker-username=<Username> --docker-password=<Password>
+  ```
+  - Uncommnet the imagePullSecret field of the podSpec in `config/creating_env/deploy_container_registry.yaml`
+- Deploy the container registry
+  ```bash
+  oc apply -f config/creating_env/deploy_container_registry.yaml -n osbuild
+  ```
+- Add the OCP CA certificate to its additionalTrustedCA
+  ```bash
+  export CLUSTER_DOMAIN='mycluster.example.com'
+  oc get secrets -n openshift-ingress-operator router-ca -o "jsonpath={.data.tls\.crt}" | base64 -d > /tmp/ca.crt
+  oc create configmap osbuild-registry-config --from-file=container-registry-osbuild.apps.${CLUSTER_DOMAIN}=/tmp/ca.crt -n openshift-config
+  oc patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":"osbuild-registry-config"}}}' --type=merge
+  ```
+- Create a secret for the Container Registry credentials
+  ```bash
+  oc create secret docker-registry osbuild-registry-credentials -n osbuild --docker-server=container-registry-osbuild.apps.${CLUSTER_DOMAIN} --docker-username=admin --docker-password=<Password>
+  ```
+- If you wish to use images from this registry, you will need to create the same secret in your namespace and add the following to your PodSpec:
+  ```yaml
+  spec:
+    imagePullSecrets:
+      - name: < Secret Name >
+  ```
+- Create a secret for the CA Bundle using the OCP route
+  ```bash
+  oc get secrets -n openshift-ingress-operator router-ca -o "jsonpath={.data.tls\.crt}" | base64 -d > /tmp/ca-bundle
+  oc create secret generic osbuild-container-registry-ca-bundle -n osbuild --from-file=/tmp/ca-bundle
+  ```
+
 ## Create Secret for RedHat Credentials
 - Find your RH creds and create a secret:
   ```bash
@@ -140,7 +183,7 @@ Currently the controller does not support creating the PSQL server on its own, m
 - Apply OSBuildEnvConfig
   ```bash
   export CLUSTER_DOMAIN='mycluster.example.com'
-  export EXTERNAL_WORKER_IP=`oc get vmi external-builder -o jsonpath={.status.interfaces[0].ipAddress}`
+  export EXTERNAL_WORKER_IP=`oc get vmi external-builder -n osbuild -o jsonpath={.status.interfaces[0].ipAddress}`
   cat config/samples/osbuilder_v1alpha1_osbuildenvconfig.yaml | envsubst | oc apply -f -
   ```
 
@@ -164,4 +207,36 @@ Currently the controller does not support creating the PSQL server on its own, m
 - Go back to the debug pod and ssh into the worker with cloud-user and the VMI's IP
   ```bash
   ssh -i /root/worker-ssh.key cloud-user@<IP Address>
+  ```
+
+## Building an edge-container image
+- Edit the sample [OSBuildConfig](config/samples/osbuilder_v1alpha1_osbuildconfig.yaml) and create the instance
+  ```bash
+  oc apply -f config/samples/osbuilder_v1alpha1_osbuildconfig.yaml
+  ```
+- Look at the OSBuildConfig status to the index of the OSBuild instance that was created
+  ```bash
+  oc get osbuildconfig osbuildconfig-sample -o jsonpath={.status.lastVersion}
+  ```
+- Wait for the OSBuild instance to finish successfully by running the command below and waiting for `containerBuildDone`
+  ```bash
+  oc get osbuild osbuildconfig-sample-1 -o jsonpath={.status.conditions}
+  ```
+- Get the URL of the Container Image
+  ```bash
+  oc get osbuild osbuildconfig-sample-1 -o jsonpath={.status.containerUrl}
+  ```
+
+## Deploy the Edge Container
+- Create a docker registry secret for your Container Image Registry as explained [here](README.md#create-a-container-registry-service)
+- Edit the sample Edge Commit [Deployment](config/creating_env/deploy_edge_commit.yaml) with the URL returned by the OSBuild CR's status and the name of the secret you created
+- Deploy the Edge Commit and expose it as a Route
+  ```bash
+  oc apply -f config/creating_env/deploy_edge_commit.yaml
+  ```
+- Once the deployment is in status Running fetch the Commit
+  ```bash
+  export CLUSTER_DOMAIN='mycluster.example.com'
+  export REF='rhel/8/x86_64/edge'
+  curl -k https://edge-commit-default.apps.${CLUSTER_DOMAIN}/repo/refs/heads/${REF}
   ```

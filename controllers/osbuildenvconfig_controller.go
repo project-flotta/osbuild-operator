@@ -131,19 +131,24 @@ const (
 	workerSetupInventoryConfigMapKey        = "inventory.yaml"
 	workerSetupInventoryTemplateFile        = "worker-config-ansible-inventory.yaml"
 
-	workerOSBuildWorkerConfigConfigMapName     = "osbuild-worker-config"
-	workerOSBuildWorkerConfigConfigMapKey      = "osbuild-worker.toml"
-	workerOSBuildWorkerConfigTemplateFile      = "worker-osbuild-worker-config.toml"
-	workerOSBuildWorkerConfigDir               = "/var/config"
-	workerOSBuildWorkerConfigS3CredentialsFile = "s3-creds"
-	workerOSBuildWorkerConfigS3CABundleFile    = "s3-cabundle"
+	workerOSBuildWorkerConfigConfigMapName                 = "osbuild-worker-config"
+	workerOSBuildWorkerConfigConfigMapKey                  = "osbuild-worker.toml"
+	workerOSBuildWorkerConfigTemplateFile                  = "worker-osbuild-worker-config.toml"
+	workerOSBuildWorkerConfigDir                           = "/var/config"
+	workerOSBuildWorkerConfigS3CredentialsFile             = "s3-creds"
+	workerOSBuildWorkerConfigS3CABundleFile                = "s3-cabundle"
+	workerOSBuildWorkerConfigContainerRegistryAuthFile     = "cir-creds"
+	workerOSBuildWorkerConfigContainerRegistryCertsDir     = "registry-certs"
+	workerOSBuildWorkerConfigContainerRegistryCABundleFile = "cir-cabundle.crt"
 
-	workerOSBuildWorkerS3CredsDir    = "/var/secrets/osbuild-s3-certs" // #nosec G101
-	workerOSBuildWorkerS3CABundleDir = "/var/secrets/osbuild-s3-ca-bundle"
+	workerOSBuildWorkerS3CredsDir                   = "/var/secrets/osbuild-s3-certs" // #nosec G101
+	workerOSBuildWorkerS3CABundleDir                = "/var/secrets/osbuild-s3-ca-bundle"
+	workerOSBuildWorkerContainerRegistryCredsDir    = "/var/secrets/osbuild-container-registry-certs" // #nosec G101
+	workerOSBuildWorkerContainerRegistryCABundleDir = "/var/secrets/osbuild-container-registry-ca-bundle"
 
 	workerOSBuildWorkerS3CredsAccessKeyIDKey     = "access-key-id"
 	workerOSBuildWorkerS3CredsSecretAccessKeyKey = "secret-access-key"
-	workerOSBuildWorkerS3CABundleKey             = "ca-bundle"
+	workerOSBuildWorkerCABundleKey               = "ca-bundle"
 
 	workerSetupJobSSHKeyDir = "/var/secrets/ssh"
 
@@ -200,23 +205,29 @@ type workerSetupAnsibleConfigParameters struct {
 }
 
 type workerSetupPlaybookParameters struct {
-	RPMRepoDistribution                    string
-	OSBuildComposerTag                     string
-	OSBuildTag                             string
-	RHCredentialsDir                       string
-	RHCredentialsUsernameKey               string
-	RHCredentialsPasswordKey               string
-	OSBuildWorkerCertsDir                  string
-	WorkerAPIAddress                       string
-	OSBuildWorkerConfigDir                 string
-	OSBuildWorkerConfigFile                string
-	OSBuildWorkerS3CredsFile               string
-	OSBuildWorkerS3CredsDir                string
-	OSBuildWorkerS3CredsAccessKeyIDKey     string
-	OSBuildWorkerS3CredsSecretAccessKeyKey string
-	OSBuildWorkerS3CABundleFile            string
-	OSBuildWorkerS3CABundleDir             string
-	OSBuildWorkerS3CABundleKey             string
+	RPMRepoDistribution                        string
+	OSBuildComposerTag                         string
+	OSBuildTag                                 string
+	RHCredentialsDir                           string
+	RHCredentialsUsernameKey                   string
+	RHCredentialsPasswordKey                   string
+	OSBuildWorkerCertsDir                      string
+	WorkerAPIAddress                           string
+	OSBuildWorkerConfigDir                     string
+	OSBuildWorkerConfigFile                    string
+	OSBuildWorkerS3CredsFile                   string
+	OSBuildWorkerS3CredsDir                    string
+	OSBuildWorkerS3CredsAccessKeyIDKey         string
+	OSBuildWorkerS3CredsSecretAccessKeyKey     string
+	OSBuildWorkerS3CABundleFile                string
+	OSBuildWorkerS3CABundleDir                 string
+	OSBuildWorkerS3CABundleKey                 string
+	OSBuildWorkerContainerRegistryCredsDir     string
+	OSBuildWorkerContainerRegistryAuthFile     string
+	OSBuildWorkerContainerRegistryCertsDir     string
+	OSBuildWorkerContainerRegistryCABundleFile string
+	OSBuildWorkerContainerRegistryCABundleDir  string
+	OSBuildWorkerContainerRegistryCABundleKey  string
 }
 
 type workerSetupInventoryParameters struct {
@@ -234,17 +245,30 @@ type workerVMParameters struct {
 	SSHKeysSecretName string
 }
 
-type workerOSBuildWorkerConfigParametersGenericS3 struct {
+type workerOSBuildWorkerConfigGenericS3Parameters struct {
 	Region              string
 	Endpoint            string
 	CABundleFile        *string
 	SkipSSLVerification *bool
 }
 
-type workerOSBuildWorkerConfigParameters struct {
+type workerOSBuildWorkerConfigS3Parameters struct {
 	CredentialsFile string
 	Bucket          string
-	GenericS3       *workerOSBuildWorkerConfigParametersGenericS3
+	GenericS3       *workerOSBuildWorkerConfigGenericS3Parameters
+}
+
+type workerOSBuildWorkerConfigContainersParameters struct {
+	AuthFile   string
+	Domain     string
+	PathPrefix string
+	CertPath   string
+	TLSVerify  bool
+}
+
+type workerOSBuildWorkerConfigParameters struct {
+	S3Params         workerOSBuildWorkerConfigS3Parameters
+	ContainersParams workerOSBuildWorkerConfigContainersParameters
 }
 
 type workerSetupJobParameters struct {
@@ -267,7 +291,9 @@ type workerSetupJobParameters struct {
 	WorkerOSBuildWorkerConfigConfigMapName string
 	OSBuildWorkerConfigDir                 string
 	OSBuildWorkerS3CredsDir                string
+	OSBuildWorkerContainerRegistryCredsDir string
 	WorkerS3CredsSecretName                string
+	WorkerContainerRegistryCredsSecretName string
 }
 
 // OSBuildEnvConfigReconciler reconciles a OSBuildEnvConfig object
@@ -1037,23 +1063,29 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerCertificateExists(ctx context.C
 
 func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigPlaybookExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig, workerName, workerAPIAddress string) (bool, error) {
 	workerSetupPlaybookParams := workerSetupPlaybookParameters{
-		RPMRepoDistribution:                    workerRPMRepoDistribution,
-		OSBuildComposerTag:                     conf.GlobalConf.WorkerOSBuildComposerVersion,
-		OSBuildTag:                             conf.GlobalConf.WorkerOSBuildVersion,
-		RHCredentialsDir:                       workerRHCredentialsDir,
-		RHCredentialsUsernameKey:               workerRHCredentialsUsernameKey,
-		RHCredentialsPasswordKey:               workerRHCredentialsPasswordKey,
-		OSBuildWorkerCertsDir:                  workerOSBuildWorkerCertsDir,
-		WorkerAPIAddress:                       workerAPIAddress,
-		OSBuildWorkerConfigDir:                 workerOSBuildWorkerConfigDir,
-		OSBuildWorkerConfigFile:                workerOSBuildWorkerConfigConfigMapKey,
-		OSBuildWorkerS3CredsFile:               workerOSBuildWorkerConfigS3CredentialsFile,
-		OSBuildWorkerS3CredsDir:                workerOSBuildWorkerS3CredsDir,
-		OSBuildWorkerS3CredsAccessKeyIDKey:     workerOSBuildWorkerS3CredsAccessKeyIDKey,
-		OSBuildWorkerS3CredsSecretAccessKeyKey: workerOSBuildWorkerS3CredsSecretAccessKeyKey,
-		OSBuildWorkerS3CABundleFile:            workerOSBuildWorkerConfigS3CABundleFile,
-		OSBuildWorkerS3CABundleDir:             workerOSBuildWorkerS3CABundleDir,
-		OSBuildWorkerS3CABundleKey:             workerOSBuildWorkerS3CABundleKey,
+		RPMRepoDistribution:                        workerRPMRepoDistribution,
+		OSBuildComposerTag:                         conf.GlobalConf.WorkerOSBuildComposerVersion,
+		OSBuildTag:                                 conf.GlobalConf.WorkerOSBuildVersion,
+		RHCredentialsDir:                           workerRHCredentialsDir,
+		RHCredentialsUsernameKey:                   workerRHCredentialsUsernameKey,
+		RHCredentialsPasswordKey:                   workerRHCredentialsPasswordKey,
+		OSBuildWorkerCertsDir:                      workerOSBuildWorkerCertsDir,
+		WorkerAPIAddress:                           workerAPIAddress,
+		OSBuildWorkerConfigDir:                     workerOSBuildWorkerConfigDir,
+		OSBuildWorkerConfigFile:                    workerOSBuildWorkerConfigConfigMapKey,
+		OSBuildWorkerS3CredsFile:                   workerOSBuildWorkerConfigS3CredentialsFile,
+		OSBuildWorkerS3CredsDir:                    workerOSBuildWorkerS3CredsDir,
+		OSBuildWorkerS3CredsAccessKeyIDKey:         workerOSBuildWorkerS3CredsAccessKeyIDKey,
+		OSBuildWorkerS3CredsSecretAccessKeyKey:     workerOSBuildWorkerS3CredsSecretAccessKeyKey,
+		OSBuildWorkerS3CABundleFile:                workerOSBuildWorkerConfigS3CABundleFile,
+		OSBuildWorkerS3CABundleDir:                 workerOSBuildWorkerS3CABundleDir,
+		OSBuildWorkerS3CABundleKey:                 workerOSBuildWorkerCABundleKey,
+		OSBuildWorkerContainerRegistryCredsDir:     workerOSBuildWorkerContainerRegistryCredsDir,
+		OSBuildWorkerContainerRegistryAuthFile:     workerOSBuildWorkerConfigContainerRegistryAuthFile,
+		OSBuildWorkerContainerRegistryCertsDir:     workerOSBuildWorkerConfigContainerRegistryCertsDir,
+		OSBuildWorkerContainerRegistryCABundleFile: workerOSBuildWorkerConfigContainerRegistryCABundleFile,
+		OSBuildWorkerContainerRegistryCABundleDir:  workerOSBuildWorkerContainerRegistryCABundleDir,
+		OSBuildWorkerContainerRegistryCABundleKey:  workerOSBuildWorkerCABundleKey,
 	}
 	return r.ensureConfigMapForTemplateFileExists(ctx, fmt.Sprintf(workerSetupPlaybookConfigMapNameFormat, workerName), workerSetupPlaybookConfigMapKey, workerSetupPlaybookTemplateFile, workerSetupPlaybookParams, instance)
 }
@@ -1076,25 +1108,41 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigInventoryExists(ctx conte
 
 func (r *OSBuildEnvConfigReconciler) ensureOSBuildWorkerConfigExists(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
 	workerOSBuildWorkerConfigParams := workerOSBuildWorkerConfigParameters{
-		CredentialsFile: workerOSBuildWorkerConfigS3CredentialsFile,
+		S3Params: workerOSBuildWorkerConfigS3Parameters{
+			CredentialsFile: workerOSBuildWorkerConfigS3CredentialsFile,
+		},
+		ContainersParams: workerOSBuildWorkerConfigContainersParameters{
+			AuthFile:   workerOSBuildWorkerConfigContainerRegistryAuthFile,
+			Domain:     instance.Spec.ContainerRegistryService.Domain,
+			PathPrefix: instance.Spec.ContainerRegistryService.PathPrefix,
+			TLSVerify:  true,
+		},
 	}
 
 	if instance.Spec.S3Service.AWS != nil {
-		workerOSBuildWorkerConfigParams.Bucket = instance.Spec.S3Service.AWS.Bucket
+		workerOSBuildWorkerConfigParams.S3Params.Bucket = instance.Spec.S3Service.AWS.Bucket
 	} else {
-		workerOSBuildWorkerConfigParams.Bucket = instance.Spec.S3Service.GenericS3.Bucket
-		workerOSBuildWorkerConfigParams.GenericS3 = &workerOSBuildWorkerConfigParametersGenericS3{
+		workerOSBuildWorkerConfigParams.S3Params.Bucket = instance.Spec.S3Service.GenericS3.Bucket
+		workerOSBuildWorkerConfigParams.S3Params.GenericS3 = &workerOSBuildWorkerConfigGenericS3Parameters{
 			Region:   instance.Spec.S3Service.GenericS3.Region,
 			Endpoint: instance.Spec.S3Service.GenericS3.Endpoint,
 		}
 		if instance.Spec.S3Service.GenericS3.CABundleSecretReference != nil {
 			caBundleFile := workerOSBuildWorkerConfigS3CABundleFile
-			workerOSBuildWorkerConfigParams.GenericS3.CABundleFile = &caBundleFile
+			workerOSBuildWorkerConfigParams.S3Params.GenericS3.CABundleFile = &caBundleFile
 		}
 		if instance.Spec.S3Service.GenericS3.SkipSSLVerification != nil {
-			workerOSBuildWorkerConfigParams.GenericS3.SkipSSLVerification = instance.Spec.S3Service.GenericS3.SkipSSLVerification
+			workerOSBuildWorkerConfigParams.S3Params.GenericS3.SkipSSLVerification = instance.Spec.S3Service.GenericS3.SkipSSLVerification
 		}
 	}
+
+	if instance.Spec.ContainerRegistryService.CABundleSecretReference != nil {
+		workerOSBuildWorkerConfigParams.ContainersParams.CertPath = workerOSBuildWorkerConfigContainerRegistryCertsDir
+	}
+	if instance.Spec.ContainerRegistryService.SkipSSLVerification != nil {
+		workerOSBuildWorkerConfigParams.ContainersParams.TLSVerify = !*instance.Spec.ContainerRegistryService.SkipSSLVerification
+	}
+
 	return r.ensureConfigMapForTemplateFileExists(ctx, workerOSBuildWorkerConfigConfigMapName, workerOSBuildWorkerConfigConfigMapKey, workerOSBuildWorkerConfigTemplateFile, workerOSBuildWorkerConfigParams, instance)
 }
 
@@ -1142,6 +1190,8 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerSetupJob(workerName, workerSS
 		WorkerOSBuildWorkerConfigConfigMapName: workerOSBuildWorkerConfigConfigMapName,
 		OSBuildWorkerConfigDir:                 workerOSBuildWorkerConfigDir,
 		OSBuildWorkerS3CredsDir:                workerOSBuildWorkerS3CredsDir,
+		OSBuildWorkerContainerRegistryCredsDir: workerOSBuildWorkerContainerRegistryCredsDir,
+		WorkerContainerRegistryCredsSecretName: instance.Spec.ContainerRegistryService.CredsSecretReference.Name,
 	}
 
 	if instance.Spec.S3Service.AWS != nil {
@@ -1182,6 +1232,25 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerSetupJob(workerName, workerSS
 		caBundleVolumeMount := corev1.VolumeMount{
 			Name:      caBundleSecretVolumeName,
 			MountPath: workerOSBuildWorkerS3CABundleDir,
+		}
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(job.Spec.Template.Spec.Containers[0].VolumeMounts, caBundleVolumeMount)
+	}
+
+	if instance.Spec.ContainerRegistryService.CABundleSecretReference != nil {
+		caBundleSecretVolumeName := "cir-ca-bundle" // #nosec G101
+		caBundleSecretVolume := corev1.Volume{
+			Name: caBundleSecretVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: instance.Spec.ContainerRegistryService.CABundleSecretReference.Name,
+				},
+			},
+		}
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, caBundleSecretVolume)
+
+		caBundleVolumeMount := corev1.VolumeMount{
+			Name:      caBundleSecretVolumeName,
+			MountPath: workerOSBuildWorkerContainerRegistryCABundleDir,
 		}
 		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(job.Spec.Template.Spec.Containers[0].VolumeMounts, caBundleVolumeMount)
 	}

@@ -71,6 +71,51 @@ spec:
                     - connectionSecretReference
                     type: object
                 type: object
+              containerRegistryService:
+                description: ContainerRegistryService holds the configuration needed
+                  to upload container images to the registry
+                properties:
+                  caBundleSecretReference:
+                    description: CABundleSecretReference is a reference to a secret
+                      in the same namespace, containing the CA certificate to use
+                      when connecting to the Container Registry service (optional,
+                      default empty) If provided the required key is ca-bundle
+                    properties:
+                      name:
+                        description: Name is the name of the resource in the same
+                          namespace being referenced
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  credsSecretReference:
+                    description: CredsSecretReference is a reference to a secret in
+                      the same namespace of type kubernetes.io/dockerconfigjson, containing
+                      the connection credentials for the Container Registry service
+                    properties:
+                      name:
+                        description: Name is the name of the resource in the same
+                          namespace being referenced
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  domain:
+                    description: Domain is the URL of the Container Image Registry
+                      service
+                    type: string
+                  pathPrefix:
+                    description: PathPrefix is the account URI
+                    type: string
+                  skipSSLVerification:
+                    description: SkipSSLVerification when set to true the SSL certificate
+                      will not be verified (optional, default False)
+                    type: boolean
+                required:
+                - credsSecretReference
+                - domain
+                - pathPrefix
+                type: object
               redHatCredsSecretReference:
                 description: RedHatCredsSecretReference is a reference to a secret
                   in the same namespace, containing the RedHat Portal credentials
@@ -230,6 +275,7 @@ spec:
                 minItems: 1
                 type: array
             required:
+            - containerRegistryService
             - redHatCredsSecretReference
             - s3Service
             - workers

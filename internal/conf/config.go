@@ -45,7 +45,7 @@ type OperatorConfig struct {
 	ComposerImageName string `envconfig:"COMPOSER_IMAGE_NAME" default:"quay.io/app-sre/composer"`
 
 	// ComposerImageTag is the tag of the image to use for the Composer API
-	ComposerImageTag string `envconfig:"COMPOSER_IMAGE_TAG" default:"37fc807"`
+	ComposerImageTag string `envconfig:"COMPOSER_IMAGE_TAG" default:"d3dde77"`
 
 	// EnvoyProxyImageName is the name of the image to use for the Composer's Proxy server
 	EnvoyProxyImageName string `envconfig:"ENVOY_PROXY_IMAGE_NAME" default:"docker.io/envoyproxy/envoy"`
@@ -54,10 +54,10 @@ type OperatorConfig struct {
 	EnvoyProxyImageTag string `envconfig:"ENVOY_PROXY_IMAGE_TAG" default:"v1.21-latest"`
 
 	// WorkerOSBuildComposerVersion is the release tag of OSBuild-Composer for the osbuild-worker RPM
-	WorkerOSBuildComposerVersion string `envconfig:"WORKER_OSBUILD_COMPOSER_VERSION" default:"v56"`
+	WorkerOSBuildComposerVersion string `envconfig:"WORKER_OSBUILD_COMPOSER_VERSION" default:"v59"`
 
 	// WorkerOSBuildVersion is the release tag of OSBuild for the osbuild RPM
-	WorkerOSBuildVersion string `envconfig:"WORKER_OSBUILD_VERSION" default:"v59"`
+	WorkerOSBuildVersion string `envconfig:"WORKER_OSBUILD_VERSION" default:"v63"`
 
 	// RepositoriesDir is the path to the directory where the repositories information files are stored
 	RepositoriesDir string `envconfig:"REPOSITORIES_DIR" default:"/etc/osbuild/repositories"`

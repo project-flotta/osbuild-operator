@@ -72,6 +72,11 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		externalBuilderAddress          = "192.168.1.5"
 		externalBuilderUser             = "external-user"
 		externalBuilderSSHKeySecretName = "exteranl-ssh-keys" // #nosec G101
+
+		containerRegistryDomain                      = "https://index.docker.io"
+		containerRegistryPathPrefix                  = "v1"
+		containerRegistryCredsSecretReferenceName    = "containerRegistryCredsSecretReferenceName"
+		containerRegistryCABundleSecretReferenceName = "containerRegistryCABundleSecretReferenceName"
 	)
 
 	var (
@@ -207,6 +212,17 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						},
 						SkipSSLVerification: pointer.Bool(true),
 					},
+				},
+				ContainerRegistryService: osbuildv1alpha1.ContainerRegistryServiceConfig{
+					Domain:     containerRegistryDomain,
+					PathPrefix: containerRegistryPathPrefix,
+					CredsSecretReference: buildv1.SecretLocalReference{
+						Name: containerRegistryCredsSecretReferenceName,
+					},
+					CABundleSecretReference: &buildv1.SecretLocalReference{
+						Name: containerRegistryCABundleSecretReferenceName,
+					},
+					SkipSSLVerification: pointer.BoolPtr(false),
 				},
 			},
 		}

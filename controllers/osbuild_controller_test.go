@@ -312,7 +312,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		It("should requeue if failed to getComposerStatus with error", func() {
 			// given
-			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid, nil).Return(nil, errFailed)
+			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(nil, errFailed)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
@@ -323,7 +323,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		It("should requeue if failed to getComposerStatus with failure status code", func() {
 			// given
-			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid, nil).Return(&composerGetStatusResponseBadRequest, nil)
+			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusResponseBadRequest, nil)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
@@ -334,7 +334,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		It("should requeue if job status was changed from Started to pending", func() {
 			// given
-			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid, nil).Return(&composerGetStatusPending, nil)
+			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusPending, nil)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
@@ -345,7 +345,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		It("should requeue if job status was changed from Started to success", func() {
 			// given
-			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid, nil).Return(&composerGetStatusDone, nil)
+			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusDone, nil)
 			osBuildRepository.EXPECT().PatchStatus(requestContext, gomock.Any(), gomock.Any()).Return(nil)
 
 			// when
@@ -363,7 +363,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		It("should requeue if job status was changed from Started to failed", func() {
 			// given
-			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid, nil).Return(&composerGetStatusFailed, nil)
+			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusFailed, nil)
 			osBuildRepository.EXPECT().PatchStatus(requestContext, gomock.Any(), gomock.Any()).Return(nil)
 
 			// when
@@ -375,7 +375,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		It("should requeue if job status was changed from Started to success but fail on patch status", func() {
 			// given
-			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid, nil).Return(&composerGetStatusDone, nil)
+			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusDone, nil)
 			osBuildRepository.EXPECT().PatchStatus(requestContext, gomock.Any(), gomock.Any()).Return(errFailed)
 
 			// when

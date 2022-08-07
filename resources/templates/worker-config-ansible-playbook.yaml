@@ -11,6 +11,9 @@
     osbuild_worker_config_file: "{{ .OSBuildWorkerConfigFile }}"
     osbuild_worker_s3_creds_file: "{{ .OSBuildWorkerS3CredsFile }}"
     osbuild_worker_s3_ca_bundle_file: "{{ .OSBuildWorkerS3CABundleFile }}"
+    osbuild_worker_container_registry_auth_file: "{{ .OSBuildWorkerContainerRegistryAuthFile }}"
+    osbuild_worker_container_registry_certs_dir: "{{ .OSBuildWorkerContainerRegistryCertsDir }}"
+    osbuild_worker_container_registry_ca_bundle_file: "{{ .OSBuildWorkerContainerRegistryCABundleFile }}"
   gather_facts: yes
   become: yes
   tasks:
@@ -154,12 +157,40 @@
         become: no
         ansible.builtin.stat:
           path: "{{ .OSBuildWorkerS3CABundleDir }}/{{ .OSBuildWorkerS3CABundleKey }}"
-        register: ca_bundle_file
+        register: s3_ca_bundle_file
       - name: Copy the S3 CA Bundle file if exists
         ansible.builtin.copy:
           src: "{{ .OSBuildWorkerS3CABundleDir }}/{{ .OSBuildWorkerS3CABundleKey }}"
           dest: {{"'{{ osbuild_worker_config_directory }}/{{ osbuild_worker_s3_ca_bundle_file }}'"}}
-        when: ca_bundle_file.stat.exists
+        when: s3_ca_bundle_file.stat.exists
+
+  - name: Handle the Container Registry Credential files
+    no_log: True
+    block:
+    - name: Copy the Container Registry auth file
+      ansible.builtin.copy:
+          src: "{{ .OSBuildWorkerContainerRegistryCredsDir }}/.dockerconfigjson"
+          dest: {{"'{{ osbuild_worker_config_directory }}/{{ osbuild_worker_container_registry_auth_file }}'"}}
+    - name: Handle the Container Registry CA bundle
+      block:
+      - name: Check if exists
+        delegate_to: localhost
+        become: no
+        ansible.builtin.stat:
+          path: "{{ .OSBuildWorkerContainerRegistryCABundleDir }}/{{ .OSBuildWorkerContainerRegistryCABundleKey }}"
+        register: cir_ca_bundle_file
+      - name: Copy the Container Registry CA Bundle file if exists
+        block:
+        - name: Create certs directory
+          ansible.builtin.file:
+            path: {{"'{{ osbuild_worker_config_directory }}/{{ osbuild_worker_container_registry_certs_dir }}'"}}
+            state: directory
+            mode: '0755'
+        - name: Copy the Container Registry CA Bundle file if exists
+          ansible.builtin.copy:
+            src: "{{ .OSBuildWorkerContainerRegistryCABundleDir }}/{{ .OSBuildWorkerContainerRegistryCABundleKey }}"
+            dest: {{"'{{ osbuild_worker_config_directory }}/{{ osbuild_worker_container_registry_certs_dir }}/{{ osbuild_worker_container_registry_ca_bundle_file }}'"}}
+        when: cir_ca_bundle_file.stat.exists
 
   - name: Run the Worker
     ansible.builtin.systemd:
