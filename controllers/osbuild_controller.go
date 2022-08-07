@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -36,6 +37,13 @@ import (
 	osbuildv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"github.com/project-flotta/osbuild-operator/internal/composer"
 	repositoryosbuild "github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
+)
+
+var (
+	uploadTypeForTargetImageType = map[osbuildv1alpha1.TargetImageType]composer.UploadTypes{
+		osbuildv1alpha1.EdgeContainerImageType: composer.UploadTypesContainer,
+		osbuildv1alpha1.EdgeInstallerImageType: composer.UploadTypesAwsS3,
+	}
 )
 
 const (
@@ -216,7 +224,10 @@ func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, lo
 	}
 
 	status := composeStatus.Status
-	buildUrl := r.getBuildUrl(logger, composeStatus)
+	buildUrl, err := r.getBuildUrl(logger, composeStatus)
+	if err != nil {
+		return "", err
+	}
 
 	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, containerBuildDone, failedContainerBuild, startedContainerBuild, buildUrl, emptyURL)
 	if err != nil {
@@ -226,26 +237,41 @@ func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, lo
 	return status, nil
 }
 
-func (r *OSBuildReconciler) getBuildUrl(logger logr.Logger, composeStatus *composer.ComposeStatus) string {
+func (r *OSBuildReconciler) getBuildUrl(logger logr.Logger, composeStatus *composer.ComposeStatus) (string, error) {
 	if composeStatus.ImageStatus.UploadStatus == nil {
 		logger.Info("field uploadStatus is nil")
-		return emptyURL
+		return emptyURL, nil
 	}
 
 	jsonUploadStatus, err := json.Marshal(composeStatus.ImageStatus.UploadStatus.Options)
 	if err != nil {
 		logger.Error(err, "cannot marshal the field `Options`")
-		return emptyURL
+		return emptyURL, err
 	}
 
-	var awsS3UploadStatus composer.AWSS3UploadStatus
-	err = json.Unmarshal(jsonUploadStatus, &awsS3UploadStatus)
-	if err != nil {
-		logger.Error(err, "cannot convert the field `Options` to type AWSS3UploadStatus")
-		return emptyURL
+	var buildUrl string
+	switch composeStatus.ImageStatus.UploadStatus.Type {
+	case composer.UploadTypesAwsS3:
+		var awsS3UploadStatus composer.AWSS3UploadStatus
+		err = json.Unmarshal(jsonUploadStatus, &awsS3UploadStatus)
+		if err != nil {
+			logger.Error(err, "cannot convert the field `Options` to type AWSS3UploadStatus")
+			return emptyURL, err
+		}
+		buildUrl = awsS3UploadStatus.Url
+	case composer.UploadTypesContainer:
+		var containerUploadStatus composer.ContainerUploadStatus
+		err = json.Unmarshal(jsonUploadStatus, &containerUploadStatus)
+		if err != nil {
+			logger.Error(err, "cannot convert the field `Options` to type ContainerUploadStatus")
+			return emptyURL, err
+		}
+		buildUrl = containerUploadStatus.Url
+	default:
+		return emptyURL, fmt.Errorf("unsupported upload status type %s", composeStatus.ImageStatus.UploadStatus.Type)
 	}
 
-	return awsS3UploadStatus.Url
+	return buildUrl, nil
 }
 
 func (r *OSBuildReconciler) updateIsoComposeStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (composer.ComposeStatusValue, error) {
@@ -256,7 +282,10 @@ func (r *OSBuildReconciler) updateIsoComposeStatus(ctx context.Context, logger l
 	}
 
 	status := composeStatus.Status
-	buildUrl := r.getBuildUrl(logger, composeStatus)
+	buildUrl, err := r.getBuildUrl(logger, composeStatus)
+	if err != nil {
+		return "", err
+	}
 
 	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, isoBuildDone, failedIsoBuild, startedIsoBuild, emptyURL, buildUrl)
 	if err != nil {
@@ -289,7 +318,7 @@ func (r *OSBuildReconciler) updateOSBuildConditionStatus(ctx context.Context, lo
 func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) error {
 	customizations := r.createCustomizations(osBuild.Spec.Details.Customizations)
 
-	imageRequest, err := r.createImageRequest(osBuild.Spec.Details.Distribution, &osBuild.Spec.Details.TargetImage, osbuildv1alpha1.EdgeContainerImageType)
+	imageRequest, err := r.createImageRequest(osBuild, osbuildv1alpha1.EdgeContainerImageType)
 	if err != nil {
 		return err
 	}
@@ -378,7 +407,7 @@ func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr
 }
 
 func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger logr.Logger, composeID string) (*composer.ComposeStatus, error) {
-	composerResponse, err := r.ComposerClient.GetComposeStatusWithResponse(ctx, composeID, nil)
+	composerResponse, err := r.ComposerClient.GetComposeStatusWithResponse(ctx, composeID)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("failed to get compose ID %s status", composeID))
 		return nil, err
@@ -392,30 +421,49 @@ func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger log
 	return nil, fmt.Errorf("something went wrong with requesting the composeID %v", composerResponse.StatusCode())
 }
 
-func (r *OSBuildReconciler) createImageRequest(distribution string, targetImage *osbuildv1alpha1.TargetImage, targetImageType osbuildv1alpha1.TargetImageType) (*composer.ImageRequest, error) {
-	uploadOptions := composer.UploadOptions(composer.AWSS3UploadOptions{Region: ""})
+func (r *OSBuildReconciler) createImageRequest(osBuild *osbuildv1alpha1.OSBuild, targetImageType osbuildv1alpha1.TargetImageType) (*composer.ImageRequest, error) {
+	uploadOptions, err := r.getUploadOptions(osBuild, targetImageType)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO[ECOPROJECT-902]- add repositories to OSBuildConfig and OSBuildConfigTemplate types
 	imageRequest := composer.ImageRequest{
-		Architecture:  string(targetImage.Architecture),
+		Architecture:  string(osBuild.Spec.Details.TargetImage.Architecture),
 		ImageType:     composer.ImageTypes(targetImageType),
-		UploadOptions: &uploadOptions,
+		UploadOptions: uploadOptions,
 	}
 
-	if targetImage.Repositories != nil {
+	if osBuild.Spec.Details.TargetImage.Repositories != nil {
 		var repos []composer.Repository
-		for _, osbuildRepo := range *targetImage.Repositories {
+		for _, osbuildRepo := range *osBuild.Spec.Details.TargetImage.Repositories {
 			composerRepo := osbuildRepo.DeepCopy()
 			repos = append(repos, (composer.Repository)(*composerRepo))
 		}
 		imageRequest.Repositories = repos
 	}
 
-	if targetImage.OSTree != nil {
-		imageRequest.Ostree = (*composer.OSTree)(targetImage.OSTree.DeepCopy())
+	if osBuild.Spec.Details.TargetImage.OSTree != nil {
+		imageRequest.Ostree = (*composer.OSTree)(osBuild.Spec.Details.TargetImage.OSTree.DeepCopy())
 	}
 
 	return &imageRequest, nil
+}
+
+func (r *OSBuildReconciler) getUploadOptions(osBuild *osbuildv1alpha1.OSBuild, targetImageType osbuildv1alpha1.TargetImageType) (*composer.UploadOptions, error) {
+	var uploadOptions composer.UploadOptions
+	switch uploadTypeForTargetImageType[targetImageType] {
+	case composer.UploadTypesAwsS3:
+		uploadOptions = composer.UploadOptions(composer.AWSS3UploadOptions{Region: ""})
+	case composer.UploadTypesContainer:
+		splitName := strings.Split(osBuild.Name, "-")
+		imageName := fmt.Sprintf("%s/%s", osBuild.Namespace, strings.Join(splitName[:len(splitName)-1], ""))
+		imageTag := splitName[len(splitName)-1]
+		uploadOptions = composer.UploadOptions(composer.ContainerUploadOptions{Name: &imageName, Tag: &imageTag})
+	default:
+		return nil, fmt.Errorf("unsupported TargetImageType: %s", targetImageType)
+	}
+	return &uploadOptions, nil
 }
 
 func (r *OSBuildReconciler) createCustomizations(osbuildCustomizations *osbuildv1alpha1.Customizations) *composer.Customizations {

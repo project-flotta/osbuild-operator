@@ -1,19 +1,27 @@
-{{- if .GenericS3 }}
+{{- if .S3Params.GenericS3 }}
 [generic_s3]
 {{- else }}
 [aws]
 {{- end }}
-credentials = "/etc/osbuild-worker/{{ .CredentialsFile }}"
-bucket = "{{ .Bucket }}"
-{{- if .GenericS3 }}
-endpoint = "{{ .GenericS3.Endpoint }}"
-region = "{{ .GenericS3.Region }}"
-{{- if .GenericS3.CABundleFile }}
-ca_bundle = "/etc/osbuild-worker/{{ .GenericS3.CABundleFile }}"
+credentials = "/etc/osbuild-worker/{{ .S3Params.CredentialsFile }}"
+bucket = "{{ .S3Params.Bucket }}"
+{{- if .S3Params.GenericS3 }}
+endpoint = "{{ .S3Params.GenericS3.Endpoint }}"
+region = "{{ .S3Params.GenericS3.Region }}"
+{{- if .S3Params.GenericS3.CABundleFile }}
+ca_bundle = "/etc/osbuild-worker/{{ .S3Params.GenericS3.CABundleFile }}"
 {{- end }}
-{{- if .GenericS3.SkipSSLVerification }}
-skip_ssl_verification = {{ .GenericS3.SkipSSLVerification }}
+{{- if .S3Params.GenericS3.SkipSSLVerification }}
+skip_ssl_verification = {{ .S3Params.GenericS3.SkipSSLVerification }}
 {{- else }}
 skip_ssl_verification = false
 {{- end }}
 {{- end }}
+[containers]
+auth_file_path = "/etc/osbuild-worker/{{ .ContainersParams.AuthFile }}"
+domain = "{{ .ContainersParams.Domain }}"
+path_prefix = "{{ .ContainersParams.PathPrefix }}"
+{{- if .ContainersParams.CertPath }}
+cert_path = "/etc/osbuild-worker/{{ .ContainersParams.CertPath }}"
+{{- end }}
+tls_verify = {{ .ContainersParams.TLSVerify }}

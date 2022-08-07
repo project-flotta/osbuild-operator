@@ -40,6 +40,9 @@ type OSBuildEnvConfigSpec struct {
 	// S3Service holds the configuration needed to connect to the S3 service
 	// +kubebuilder:validation:Required
 	S3Service S3ServiceConfig `json:"s3Service"`
+	// ContainerRegistryService holds the configuration needed to upload container images to the registry
+	// +kubebuilder:validation:Required
+	ContainerRegistryService ContainerRegistryServiceConfig `json:"containerRegistryService"`
 }
 
 type ComposerConfig struct {
@@ -138,6 +141,27 @@ type GenericS3ServiceConfig struct {
 	Endpoint string `json:"endpoint"`
 	// CABundleSecretReference is a reference to a secret in the same namespace,
 	// containing the CA certificate to use when connecting to the S3 service (optional, default empty)
+	// If provided the required key is ca-bundle
+	// +kubebuilder:validation:Optional
+	CABundleSecretReference *buildv1.SecretLocalReference `json:"caBundleSecretReference,omitempty"`
+	// SkipSSLVerification when set to true the SSL certificate will not be verified (optional, default False)
+	// +kubebuilder:validation:Optional
+	SkipSSLVerification *bool `json:"skipSSLVerification,omitempty"`
+}
+
+type ContainerRegistryServiceConfig struct {
+	// Domain is the URL of the Container Image Registry service
+	// +kubebuilder:validation:Required
+	Domain string `json:"domain"`
+	// PathPrefix is the account URI
+	// +kubebuilder:validation:Required
+	PathPrefix string `json:"pathPrefix"`
+	// CredsSecretReference is a reference to a secret in the same namespace of type kubernetes.io/dockerconfigjson,
+	// containing the connection credentials for the Container Registry service
+	// +kubebuilder:validation:Required
+	CredsSecretReference buildv1.SecretLocalReference `json:"credsSecretReference"`
+	// CABundleSecretReference is a reference to a secret in the same namespace,
+	// containing the CA certificate to use when connecting to the Container Registry service (optional, default empty)
 	// If provided the required key is ca-bundle
 	// +kubebuilder:validation:Optional
 	CABundleSecretReference *buildv1.SecretLocalReference `json:"caBundleSecretReference,omitempty"`

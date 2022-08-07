@@ -30,4 +30,10 @@ spec:
       region: us-east-1
       bucket: osbuild-images
       endpoint: "https://minio-s3-osbuild.apps.$CLUSTER_DOMAIN"
-
+  containerRegistryService:
+    credsSecretReference:
+      name: osbuild-registry-credentials
+    domain: "container-registry-osbuild.apps.$CLUSTER_DOMAIN"
+    pathPrefix: osbuild
+    caBundleSecretReference:
+      name: osbuild-container-registry-ca-bundle

@@ -1,0 +1,54 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-commit
+  labels:
+    app: edge-commit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-commit
+  template:
+    metadata:
+      labels:
+        app: edge-commit
+    spec:
+      imagePullSecrets:
+      - name: osbuild-registry-credentials
+      containers:
+      - name: edge-commit
+        image: container-registry-osbuild.apps.my-cluster.example.com/osbuild/default/osbuildconfigsample:1
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge-commit
+spec:
+  selector:
+    app: edge-commit
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: edge-commit
+spec:
+  port:
+    targetPort: http
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  to:
+    kind: Service
+    name: edge-commit
+    weight: 100

@@ -35,6 +35,8 @@ spec:
               mountPath: {{ .OSBuildWorkerConfigDir }}
             - name: s3-creds
               mountPath: {{ .OSBuildWorkerS3CredsDir }}
+            - name: cir-creds
+              mountPath: {{ .OSBuildWorkerContainerRegistryCredsDir }}
           imagePullPolicy: Always
           name: ansible
       volumes:
@@ -63,3 +65,6 @@ spec:
         - name: s3-creds
           secret:
             secretName: {{ .WorkerS3CredsSecretName }}
+        - name: cir-creds
+          secret:
+            secretName: {{ .WorkerContainerRegistryCredsSecretName }}

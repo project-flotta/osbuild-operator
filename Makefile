@@ -368,3 +368,7 @@ ginkgo: ## Download ginkgo locally if necessary.
 ifeq (, $(wildcard $(GINKGO)))
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@v2.1.3)
 endif
+
+.PHONY: composer-api
+update-composer-api:
+	curl -o internal/composer/openapi.v2.yml https://raw.githubusercontent.com/osbuild/osbuild-composer/main/internal/cloudapi/v2/openapi.v2.yml
