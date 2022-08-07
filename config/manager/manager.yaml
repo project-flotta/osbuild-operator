@@ -56,10 +56,7 @@ spec:
             memory: 64Mi
         env:
         - name: BASE_ISO_CONTAINER_IMAGE
-          valueFrom:
-            resourceFieldRef:
-              containerName: mananager
-              resource: image
+          value: $(MANAGER_CONTAINER_IMAGE)
         - name: WORKING_NAMESPACE
           valueFrom:
             fieldRef:

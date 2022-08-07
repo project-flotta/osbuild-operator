@@ -53,3 +53,13 @@ configMapGenerator:
 - name: default-repos-rhel-91
   files:
   - repositories/rhel-91.json
+
+vars:
+  - name: MANAGER_CONTAINER_IMAGE
+    objref:
+      group: apps
+      kind: Deployment
+      name: controller-manager
+      version: v1
+    fieldref:
+      fieldpath: spec.template.spec.containers.[name=manager].image
