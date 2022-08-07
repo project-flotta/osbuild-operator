@@ -26,11 +26,10 @@ import (
 // OSBuildSpec defines the desired state of OSBuild
 type OSBuildSpec struct {
 	// Details defines what to build
-	Details BuildDetails `json:"details"`
+	Details *BuildDetails `json:"details,omitempty"`
 
-	// Kickstart is a reference to a configmap that may store content of a
-	// kickstart file to be used in the target image
-	Kickstart *NameRef `json:"kickstart,omitempty" protobuf:"bytes,2,opt,name=kickstart"`
+	// EdgeInstallerDetails defines relevant properties for building edge-installer image
+	EdgeInstallerDetails *EdgeInstallerBuildDetails `json:"edgeInstallerDetails,omitempty"`
 
 	// TriggeredBy explains what triggered the build out
 	TriggeredBy TriggeredBy `json:"triggeredBy"`
@@ -103,6 +102,17 @@ type OSBuild struct {
 
 	Spec   OSBuildSpec   `json:"spec,omitempty"`
 	Status OSBuildStatus `json:"status,omitempty"`
+}
+
+// EdgeInstallerBuildDetails includes all the information needed to build the edge-installer image
+type EdgeInstallerBuildDetails struct {
+	// Distribution is the name of the O/S distribution
+	Distribution string `json:"distribution"`
+	// OSTree is the OSTree configuration of the build (optional)
+	OSTree OSTreeConfig `json:"osTree"`
+	// Kickstart is a reference to a configmap that may store content of a
+	// kickstart file to be used in the target image
+	Kickstart *NameRef `json:"kickstart,omitempty" protobuf:"bytes,2,opt,name=kickstart"`
 }
 
 //+kubebuilder:object:root=true

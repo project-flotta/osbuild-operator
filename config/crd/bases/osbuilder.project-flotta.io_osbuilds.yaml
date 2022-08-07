@@ -146,7 +146,7 @@ spec:
                           type: object
                         type: array
                       targetImageType:
-                        description: ImageType defines the target image type
+                        description: TargetImageType defines the target image type
                         enum:
                         - edge-container
                         - edge-installer
@@ -159,15 +159,40 @@ spec:
                 - distribution
                 - targetImage
                 type: object
-              kickstart:
-                description: Kickstart is a reference to a configmap that may store
-                  content of a kickstart file to be used in the target image
+              edgeInstallerDetails:
+                description: EdgeInstallerDetails defines relevant properties for
+                  building edge-installer image
                 properties:
-                  name:
-                    description: The ConfigMap to select from.
+                  distribution:
+                    description: Distribution is the name of the O/S distribution
                     type: string
+                  kickstart:
+                    description: Kickstart is a reference to a configmap that may
+                      store content of a kickstart file to be used in the target image
+                    properties:
+                      name:
+                        description: The ConfigMap to select from.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  osTree:
+                    description: OSTree is the OSTree configuration of the build (optional)
+                    properties:
+                      parent:
+                        description: Parent is the ref of the parent of target build
+                          (Optional)
+                        type: string
+                      ref:
+                        description: Ref is the ref of the target build (Optional)
+                        type: string
+                      url:
+                        description: Url is the Url of the target build (Optional)
+                        type: string
+                    type: object
                 required:
-                - name
+                - distribution
+                - osTree
                 type: object
               triggeredBy:
                 description: TriggeredBy explains what triggered the build out
@@ -176,7 +201,6 @@ spec:
                 - Webhook
                 type: string
             required:
-            - details
             - triggeredBy
             type: object
           status:

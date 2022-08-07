@@ -93,7 +93,8 @@ type Services struct {
 type TargetImage struct {
 	// Architecture defines target architecture of the image
 	Architecture Architecture `json:"architecture"`
-	// ImageType defines the target image type
+	// TargetImageType defines the target image type
+	// +kubebuilder:validation:Enum=edge-container;edge-installer
 	TargetImageType TargetImageType `json:"targetImageType"`
 	// OSTree is the OSTree configuration of the build (optional)
 	OSTree *OSTreeConfig `json:"osTree,omitempty"`
@@ -104,8 +105,12 @@ type TargetImage struct {
 // +kubebuilder:validation:Enum=x86_64;aarch64
 type Architecture string
 
-// +kubebuilder:validation:Enum=edge-container;edge-installer
 type TargetImageType string
+
+const (
+	EdgeContainerImageType TargetImageType = "edge-container"
+	EdgeInstallerImageType TargetImageType = "edge-installer"
+)
 
 // OSTreeConfig defines the OSTree ref details
 type OSTreeConfig struct {

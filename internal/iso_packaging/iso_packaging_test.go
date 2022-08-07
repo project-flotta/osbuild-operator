@@ -58,7 +58,9 @@ var _ = Describe("IsoPackageJob", Ordered, func() {
 				UID:       "test",
 			},
 			Spec: v1alpha1.OSBuildSpec{
-				Kickstart: &v1alpha1.NameRef{Name: "testKS"}},
+				EdgeInstallerDetails: &v1alpha1.EdgeInstallerBuildDetails{
+					Kickstart: &v1alpha1.NameRef{Name: "testKS"}},
+			},
 			Status: v1alpha1.OSBuildStatus{
 				ComposerIso: "http://127.0.0.1/fedora.iso"},
 		}

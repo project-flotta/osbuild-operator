@@ -78,7 +78,7 @@ var _ = Describe("OSBuild creation", func() {
 					},
 					TargetImage: v1alpha1.TargetImage{
 						Architecture:    "x86_64",
-						TargetImageType: "edge-container",
+						TargetImageType: v1alpha1.EdgeContainerImageType,
 						OSTree:          nil,
 					},
 				},
@@ -95,7 +95,7 @@ var _ = Describe("OSBuild creation", func() {
 				Namespace: osBuildConfig.Namespace,
 			},
 			Spec: v1alpha1.OSBuildSpec{
-				Details:     *expectedOSBuildSpecDetails,
+				Details:     expectedOSBuildSpecDetails,
 				TriggeredBy: "UpdateCR",
 			},
 		}
@@ -192,8 +192,6 @@ var _ = Describe("OSBuild creation", func() {
 			templateName = "template-name"
 		)
 		var (
-			kickstartTxt           = "kickstart-raw"
-			kickstartMap           corev1.ConfigMap
 			template               v1alpha1.OSBuildConfigTemplate
 			expectedCustomizations v1alpha1.Customizations
 		)
@@ -231,156 +229,7 @@ var _ = Describe("OSBuild creation", func() {
 			}
 			expectedOSBuild.Spec.Details.Customizations = &expectedCustomizations
 
-			kickstartMap = corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      configName(OSBuildConfigName, 1),
-					Namespace: osBuildConfig.Namespace,
-				},
-				Data: map[string]string{"kickstart": kickstartTxt},
-			}
 		})
-
-		DescribeTable("should create with no kickstart", func(iso *v1alpha1.IsoConfiguration) {
-			// given
-			template.Spec.Iso = iso
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
-
-			cp := osBuildConfig.DeepCopy()
-			one := 1
-			cp.Status.LastVersion = &one
-			cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
-			cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
-			osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
-
-			osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
-
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
-
-			//then
-			Expect(err).ToNot(HaveOccurred())
-		},
-			Entry("no ISO", nil),
-			Entry("no ISO.Kickstart", &v1alpha1.IsoConfiguration{}),
-			Entry("no raw or config map ref", &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					// nothing
-				},
-			}),
-		)
-
-		It("should create when target kickstart map already exists", func() {
-			// given
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					Raw: &kickstartTxt,
-				},
-			}
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
-
-			configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
-				Return(&kickstartMap, nil)
-
-			configMapRepository.EXPECT().Patch(ctx, gomock.Any(), gomock.Any())
-
-			cp := osBuildConfig.DeepCopy()
-			one := 1
-			cp.Status.LastVersion = &one
-			cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
-			cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
-			osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
-
-			expectedOSBuild.Spec.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
-			osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
-
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
-
-			//then
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should create with raw kickstart", func() {
-			// given
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					Raw: &kickstartTxt,
-				},
-			}
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
-
-			// Kickstart ConfigMap doesn't exist
-			configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
-				Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
-
-			configMapRepository.EXPECT().Create(ctx, &kickstartMap)
-
-			configMapRepository.EXPECT().Patch(ctx, &kickstartMap, gomock.Any())
-
-			cp := osBuildConfig.DeepCopy()
-			one := 1
-			cp.Status.LastVersion = &one
-			cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
-			cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
-			osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
-
-			expectedOSBuild.Spec.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
-			osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
-
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
-
-			//then
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should create with ConfigMap kickstart", func() {
-			// given
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
-			kickstartTemplateCMName := "kickstart-tmpl-cm"
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					ConfigMapName: &kickstartTemplateCMName,
-				},
-			}
-
-			kickstartTemplateCM := corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      kickstartTemplateCMName,
-					Namespace: osBuildConfig.Namespace,
-				},
-				Data: map[string]string{
-					"kickstart": kickstartTxt,
-				},
-			}
-			configMapRepository.EXPECT().Read(ctx, kickstartTemplateCMName, osBuildConfig.Namespace).
-				Return(&kickstartTemplateCM, nil)
-
-			// Kickstart ConfigMap doesn't exist
-			configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
-				Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
-
-			configMapRepository.EXPECT().Create(ctx, &kickstartMap)
-
-			configMapRepository.EXPECT().Patch(ctx, &kickstartMap, gomock.Any())
-
-			cp := osBuildConfig.DeepCopy()
-			one := 1
-			cp.Status.LastVersion = &one
-			cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
-			cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
-			osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
-
-			expectedOSBuild.Spec.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
-			osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
-
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
-
-			//then
-			Expect(err).ToNot(HaveOccurred())
-		})
-
 		It("should fail when template not found", func() {
 			// given
 			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).
@@ -393,129 +242,293 @@ var _ = Describe("OSBuild creation", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should fail when kickstart template config map not found", func() {
-			// given
-			kickstartTemplateCMName := "kickstart-tmpl-cm"
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					ConfigMapName: &kickstartTemplateCMName,
-				},
-			}
+		Context("with edge-installer image type", func() {
+			var (
+				kickstartTxt = "kickstart-raw"
+				kickstartMap corev1.ConfigMap
+			)
+			BeforeEach(func() {
+				osBuildConfig.Spec.Details.TargetImage.TargetImageType = v1alpha1.EdgeInstallerImageType
+				expectedOSBuild.Spec.Details.TargetImage.TargetImageType = v1alpha1.EdgeInstallerImageType
 
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+				kickstartMap = corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configName(OSBuildConfigName, 1),
+						Namespace: osBuildConfig.Namespace,
+					},
+					Data: map[string]string{"kickstart": kickstartTxt},
+				}
+			})
+			DescribeTable("should create with no kickstart", func(iso *v1alpha1.IsoConfiguration) {
+				// given
+				template.Spec.Iso = iso
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
 
-			// Kickstart ConfigMap retrieval fails
-			configMapRepository.EXPECT().Read(ctx, kickstartTemplateCMName, osBuildConfig.Namespace).
-				Return(nil, fmt.Errorf("boom"))
+				cp := osBuildConfig.DeepCopy()
+				one := 1
+				cp.Status.LastVersion = &one
+				cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
+				cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
+				osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
 
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
+				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
 
-			//then
-			Expect(err).To(HaveOccurred())
-		})
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
 
-		It("should fail when target kickstart config map reading fails", func() {
-			// given
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					Raw: &kickstartTxt,
-				},
-			}
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+				//then
+				Expect(err).ToNot(HaveOccurred())
+			},
+				Entry("no ISO", nil),
+				Entry("no ISO.Kickstart", &v1alpha1.IsoConfiguration{}),
+				Entry("no raw or config map ref", &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						// nothing
+					},
+				}),
+			)
 
-			// Kickstart ConfigMap doesn't exist
-			configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
-				Return(nil, fmt.Errorf("boom"))
+			It("should create when target kickstart map already exists", func() {
+				// given
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						Raw: &kickstartTxt,
+					},
+				}
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
 
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
+				configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
+					Return(&kickstartMap, nil)
 
-			//then
-			Expect(err).To(HaveOccurred())
-		})
+				configMapRepository.EXPECT().Patch(ctx, gomock.Any(), gomock.Any())
 
-		It("should fail when target kickstart config map creation fails", func() {
-			// given
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					Raw: &kickstartTxt,
-				},
-			}
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+				cp := osBuildConfig.DeepCopy()
+				one := 1
+				cp.Status.LastVersion = &one
+				cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
+				cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
+				osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
 
-			// Kickstart ConfigMap doesn't exist
-			configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
-				Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
+				// TODO: [ECOPROJECT-917] validate the kickstart file as part of edge-installer details
+				//expectedOSBuild.Spec.EdgeInstallerDetails.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
+				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
 
-			configMapRepository.EXPECT().Create(ctx, &kickstartMap).Return(fmt.Errorf("boom"))
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
 
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
+				//then
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-			//then
-			Expect(err).To(HaveOccurred())
-		})
+			It("should create with raw kickstart", func() {
+				// given
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						Raw: &kickstartTxt,
+					},
+				}
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
 
-		It("should fail when target kickstart config map patching fails", func() {
-			// given
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					Raw: &kickstartTxt,
-				},
-			}
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+				// Kickstart ConfigMap doesn't exist
+				configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
+					Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
 
-			// Kickstart ConfigMap doesn't exist
-			configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
-				Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
+				configMapRepository.EXPECT().Create(ctx, &kickstartMap)
 
-			configMapRepository.EXPECT().Create(ctx, &kickstartMap)
+				configMapRepository.EXPECT().Patch(ctx, &kickstartMap, gomock.Any())
 
-			configMapRepository.EXPECT().Patch(ctx, &kickstartMap, gomock.Any()).Return(fmt.Errorf("boom"))
+				cp := osBuildConfig.DeepCopy()
+				one := 1
+				cp.Status.LastVersion = &one
+				cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
+				cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
+				osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
 
-			expectedOSBuild.Spec.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
-			osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
+				// TODO: [ECOPROJECT-917] validate the kickstart file as part of edge-installer details
+				//expectedOSBuild.Spec.EdgeInstallerDetails.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
+				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
 
-			cp := osBuildConfig.DeepCopy()
-			one := 1
-			cp.Status.LastVersion = &one
-			cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
-			cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
-			osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
 
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
+				//then
+				Expect(err).ToNot(HaveOccurred())
+			})
 
-			//then
-			Expect(err).To(HaveOccurred())
-		})
+			It("should create with ConfigMap kickstart", func() {
+				// given
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+				kickstartTemplateCMName := "kickstart-tmpl-cm"
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						ConfigMapName: &kickstartTemplateCMName,
+					},
+				}
 
-		It("should fail creating with malformed template kickstart config map", func() {
-			// given
-			osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
-			kickstartTemplateCMName := "kickstart-tmpl-cm"
-			template.Spec.Iso = &v1alpha1.IsoConfiguration{
-				Kickstart: &v1alpha1.KickstartFile{
-					ConfigMapName: &kickstartTemplateCMName,
-				},
-			}
+				kickstartTemplateCM := corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      kickstartTemplateCMName,
+						Namespace: osBuildConfig.Namespace,
+					},
+					Data: map[string]string{
+						"kickstart": kickstartTxt,
+					},
+				}
+				configMapRepository.EXPECT().Read(ctx, kickstartTemplateCMName, osBuildConfig.Namespace).
+					Return(&kickstartTemplateCM, nil)
 
-			kickstartTemplateCM := corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      kickstartTemplateCMName,
-					Namespace: osBuildConfig.Namespace,
-				},
-				// no Data
-			}
-			configMapRepository.EXPECT().Read(ctx, kickstartTemplateCMName, osBuildConfig.Namespace).
-				Return(&kickstartTemplateCM, nil)
+				// Kickstart ConfigMap doesn't exist
+				configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
+					Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
 
-			// when
-			err := creator.Create(ctx, &osBuildConfig)
+				configMapRepository.EXPECT().Create(ctx, &kickstartMap)
 
-			//then
-			Expect(err).To(HaveOccurred())
+				configMapRepository.EXPECT().Patch(ctx, &kickstartMap, gomock.Any())
+
+				cp := osBuildConfig.DeepCopy()
+				one := 1
+				cp.Status.LastVersion = &one
+				cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
+				cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
+				osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
+
+				// TODO: [ECOPROJECT-917] validate the kickstart file as part of edge-installer details
+				//expectedOSBuild.Spec.EdgeInstallerDetails.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
+				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
+
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
+
+				//then
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should fail when target kickstart config map reading fails", func() {
+				// given
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						Raw: &kickstartTxt,
+					},
+				}
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+
+				// Kickstart ConfigMap doesn't exist
+				configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
+					Return(nil, fmt.Errorf("boom"))
+
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
+
+				//then
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should fail when target kickstart config map creation fails", func() {
+				// given
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						Raw: &kickstartTxt,
+					},
+				}
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+
+				// Kickstart ConfigMap doesn't exist
+				configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
+					Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
+
+				configMapRepository.EXPECT().Create(ctx, &kickstartMap).Return(fmt.Errorf("boom"))
+
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
+
+				//then
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should fail when target kickstart config map patching fails", func() {
+				// given
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						Raw: &kickstartTxt,
+					},
+				}
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+
+				// Kickstart ConfigMap doesn't exist
+				configMapRepository.EXPECT().Read(ctx, kickstartMap.Name, osBuildConfig.Namespace).
+					Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
+
+				configMapRepository.EXPECT().Create(ctx, &kickstartMap)
+
+				configMapRepository.EXPECT().Patch(ctx, &kickstartMap, gomock.Any()).Return(fmt.Errorf("boom"))
+
+				// TODO: [ECOPROJECT-917] validate the kickstart file as part of edge-installer details
+				//expectedOSBuild.Spec.EdgeInstallerDetails.Kickstart = &v1alpha1.NameRef{Name: kickstartMap.Name}
+				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
+
+				cp := osBuildConfig.DeepCopy()
+				one := 1
+				cp.Status.LastVersion = &one
+				cp.Status.CurrentTemplateResourceVersion = &template.ResourceVersion
+				cp.Status.LastTemplateResourceVersion = &template.ResourceVersion
+				osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
+
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
+
+				//then
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should fail when kickstart template config map not found", func() {
+				// given
+				kickstartTemplateCMName := "kickstart-tmpl-cm"
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						ConfigMapName: &kickstartTemplateCMName,
+					},
+				}
+
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+
+				// Kickstart ConfigMap retrieval fails
+				configMapRepository.EXPECT().Read(ctx, kickstartTemplateCMName, osBuildConfig.Namespace).
+					Return(nil, fmt.Errorf("boom"))
+
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
+
+				//then
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should fail creating with malformed template kickstart config map", func() {
+				// given
+				osBuildConfigTemplateRepository.EXPECT().Read(ctx, templateName, osBuildConfig.Namespace).Return(&template, nil)
+				kickstartTemplateCMName := "kickstart-tmpl-cm"
+				template.Spec.Iso = &v1alpha1.IsoConfiguration{
+					Kickstart: &v1alpha1.KickstartFile{
+						ConfigMapName: &kickstartTemplateCMName,
+					},
+				}
+
+				kickstartTemplateCM := corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      kickstartTemplateCMName,
+						Namespace: osBuildConfig.Namespace,
+					},
+					// no Data
+				}
+				configMapRepository.EXPECT().Read(ctx, kickstartTemplateCMName, osBuildConfig.Namespace).
+					Return(&kickstartTemplateCM, nil)
+
+				// when
+				err := creator.Create(ctx, &osBuildConfig)
+
+				//then
+				Expect(err).To(HaveOccurred())
+			})
+
 		})
 	})
 })

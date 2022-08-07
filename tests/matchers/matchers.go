@@ -61,15 +61,16 @@ func (o osBuildMatcher) Matches(other interface{}) bool {
 		return false
 	}
 
-	if !reflect.DeepEqual(actual.Spec.Kickstart, o.expected.Spec.Kickstart) {
-		return false
-	}
+	//[ECOPROJECT-917] TODO: validate the kickstart file as part of EdgeInstallerDetails
+	//if !reflect.DeepEqual(actual.Spec.EdgeInstallerDetails.Kickstart, o.expected.Spec.EdgeInstallerDetails.Kickstart) {
+	//	return false
+	//}
 
 	if actual.Spec.TriggeredBy != o.expected.Spec.TriggeredBy {
 		return false
 	}
 
-	return matchBuildDetails(actual.Spec.Details, o.expected.Spec.Details)
+	return matchBuildDetails(*actual.Spec.Details, *o.expected.Spec.Details)
 }
 
 func (o osBuildMatcher) String() string {

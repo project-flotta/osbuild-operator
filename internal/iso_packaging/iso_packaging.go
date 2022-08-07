@@ -60,7 +60,7 @@ func (b *Builder) Start(ctx context.Context) error {
 		return err
 	}
 
-	if b.build.Spec.Kickstart == nil {
+	if b.build.Spec.EdgeInstallerDetails.Kickstart == nil {
 		return fmt.Errorf("kickstart is not defined")
 	}
 
@@ -122,7 +122,7 @@ func (b *Builder) getIsoPackageJob(command string) *batchv1.Job {
 									Sources: []v1.VolumeProjection{{
 										ConfigMap: &v1.ConfigMapProjection{
 											LocalObjectReference: v1.LocalObjectReference{
-												Name: b.build.Spec.Kickstart.Name,
+												Name: b.build.Spec.EdgeInstallerDetails.Kickstart.Name,
 											},
 										},
 									}},
