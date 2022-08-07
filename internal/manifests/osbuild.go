@@ -83,12 +83,29 @@ func (o *OSBuildCreator) Create(ctx context.Context, osBuildConfig *osbuildv1alp
 		return err
 	}
 
-	kickstartConfigMap, osConfigTemplate, err := o.applyTemplate(ctx, osBuildConfig, osBuildConfigSpecDetails, osBuildName, osBuild)
+	osConfigTemplate, err := o.applyTemplate(ctx, osBuildConfig, osBuildConfigSpecDetails)
 	if err != nil {
 		logger.Error(err, "cannot apply template to osBuild")
 		return err
 	}
-	osBuild.Spec.Details = *osBuildConfigSpecDetails
+
+	var kickstartConfigMap *corev1.ConfigMap
+
+	switch osBuildConfig.Spec.Details.TargetImage.TargetImageType {
+	case osbuildv1alpha1.EdgeContainerImageType:
+		osBuild.Spec.Details = osBuildConfigSpecDetails
+	case osbuildv1alpha1.EdgeInstallerImageType:
+		//[ECOPROJECT-917] TODO: build it by two steps and use two OSBuild instances
+		osBuild.Spec.Details = osBuildConfigSpecDetails
+		kickstartConfigMap, err = o.createKickstartConfigMap(ctx, osBuildConfig, osConfigTemplate, osBuildName, osBuild.Namespace)
+		if err != nil {
+			return err
+		}
+		// TODO: uncomment when the edge-installer creation is activated
+		//if kickstartConfigMap != nil {
+		//	osBuild.Spec.EdgeInstallerDetails.Kickstart = &osbuildv1alpha1.NameRef{Name: osBuildName}
+		//}
+	}
 
 	// Set the owner of the osBuild CR to be osBuildConfig in order to manage lifecycle of the osBuild CR.
 	// Especially in deletion of osBuildConfig CR
@@ -116,6 +133,7 @@ func (o *OSBuildCreator) Create(ctx context.Context, osBuildConfig *osbuildv1alp
 		return err
 	}
 
+	// set the owner of the kickstart file to be the osBuild instance only if it was created
 	if kickstartConfigMap != nil {
 		err = o.setKickstartConfigMapOwner(ctx, kickstartConfigMap, osBuild)
 		if err != nil {
@@ -168,27 +186,18 @@ func getDefaultRepositories(distribution string, arch osbuildv1alpha1.Architectu
 	return archRepos, nil
 }
 
-func (o *OSBuildCreator) applyTemplate(ctx context.Context, osBuildConfig *osbuildv1alpha1.OSBuildConfig, osBuildConfigSpecDetails *osbuildv1alpha1.BuildDetails, osBuildName string, osBuild *osbuildv1alpha1.OSBuild) (*corev1.ConfigMap, *osbuildv1alpha1.OSBuildConfigTemplate, error) {
-	var kickstartConfigMap *corev1.ConfigMap
+func (o *OSBuildCreator) applyTemplate(ctx context.Context, osBuildConfig *osbuildv1alpha1.OSBuildConfig, osBuildConfigSpecDetails *osbuildv1alpha1.BuildDetails) (*osbuildv1alpha1.OSBuildConfigTemplate, error) {
 	var osConfigTemplate *osbuildv1alpha1.OSBuildConfigTemplate
 	if template := osBuildConfig.Spec.Template; template != nil {
 		var err error
 		osConfigTemplate, err = o.OSBuildConfigTemplateRepository.Read(ctx, template.OSBuildConfigTemplateRef, osBuildConfig.Namespace)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		osBuildConfigSpecDetails.Customizations = customizations.MergeCustomizations(osConfigTemplate.Spec.Customizations, osBuildConfigSpecDetails.Customizations)
-
-		kickstartConfigMap, err = o.createKickstartConfigMap(ctx, osBuildConfig, osConfigTemplate, osBuildName, osBuild.Namespace)
-		if err != nil {
-			return nil, nil, err
-		}
-		if kickstartConfigMap != nil {
-			osBuild.Spec.Kickstart = &osbuildv1alpha1.NameRef{Name: osBuildName}
-		}
 	}
-	return kickstartConfigMap, osConfigTemplate, nil
+	return osConfigTemplate, nil
 }
 
 func (o *OSBuildCreator) setKickstartConfigMapOwner(ctx context.Context, kickstartConfigMap *corev1.ConfigMap, osBuild *osbuildv1alpha1.OSBuild) error {

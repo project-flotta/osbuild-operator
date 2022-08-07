@@ -53,9 +53,6 @@ const (
 	failedIsoBuild        = "failedIsoBuild"
 	startedIsoBuild       = "startedIsoBuild"
 
-	// Image types
-	EdgeContainerImgType = "edge-container"
-
 	EmptyComposeID = ""
 	emptyURL       = ""
 
@@ -102,16 +99,21 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	lastBuildStatus := osbuildv1alpha1.OSBuildConditionType("")
-	if osBuild.Status.Conditions != nil {
-		conditionLen := len(osBuild.Status.Conditions)
-		lastBuildStatus = osBuild.Status.Conditions[conditionLen-1].Type
+	if osBuild.Spec.Details != nil {
+		// build edge-container image
+		return r.buildEdgeContainerImage(ctx, logger, osBuild)
+	} else if osBuild.Spec.EdgeInstallerDetails != nil {
+		return r.buildEdgeInstallerImage(ctx, logger, osBuild)
 	}
 
+	return ctrl.Result{}, nil
+}
+
+func (r *OSBuildReconciler) buildEdgeContainerImage(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (ctrl.Result, error) {
 	if osBuild.Status.ContainerComposeId == EmptyComposeID {
 		// if the edge container wasn't created yet - schedule a new build
 		logger.Info("create an edge-container")
-		err = r.postComposeEdgeContainer(ctx, logger, osBuild)
+		err := r.postComposeEdgeContainer(ctx, logger, osBuild)
 		if err != nil {
 			logger.Error(err, "failed to create an edge-container")
 			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
@@ -121,7 +123,14 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 	}
 
-	if lastBuildStatus == startedContainerBuild {
+	lastBuildStatus := osbuildv1alpha1.OSBuildConditionType("")
+	if osBuild.Status.Conditions != nil {
+		conditionLen := len(osBuild.Status.Conditions)
+		lastBuildStatus = osBuild.Status.Conditions[conditionLen-1].Type
+	}
+
+	switch lastBuildStatus {
+	case startedContainerBuild:
 		// if the edge container already created but wasn't finish yet - check the build status
 		logger.Info("update the edge-container's compose ID job status")
 		composeStatus, err := r.updateContainerComposeStatus(ctx, logger, osBuild)
@@ -137,26 +146,36 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 
 		return ctrl.Result{Requeue: true}, nil
-	}
 
-	if lastBuildStatus == failedContainerBuild {
+	case failedContainerBuild:
 		logger.Error(fmt.Errorf("failed to build edge container"), "")
 		return ctrl.Result{}, nil
-	}
 
-	// if the build was finished successfully and the target image is edge-container then return
-	if lastBuildStatus == containerBuildDone && osBuild.Spec.Details.TargetImage.TargetImageType == EdgeContainerImgType {
+	case containerBuildDone:
 		logger.Info(fmt.Sprintf("the job ID %s, Finished", osBuild.Status.ContainerComposeId))
 		return ctrl.Result{}, nil
-	}
 
+	default:
+		logger.Error(fmt.Errorf("failed to parse condition status"), "")
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
+	}
+}
+
+func (r *OSBuildReconciler) buildEdgeInstallerImage(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (ctrl.Result, error) {
 	if osBuild.Status.IsoComposeId == EmptyComposeID {
 		// if the edge installer build wasn't created yet - schedule a new build
-		// TODO postComposeEdgeInstaller - schedule a new build
+		// [ECOPROJECT-917] TODO postComposeEdgeInstaller - schedule a new build
 		return ctrl.Result{}, nil
 	}
 
-	if lastBuildStatus == startedIsoBuild {
+	lastBuildStatus := osbuildv1alpha1.OSBuildConditionType("")
+	if osBuild.Status.Conditions != nil {
+		conditionLen := len(osBuild.Status.Conditions)
+		lastBuildStatus = osBuild.Status.Conditions[conditionLen-1].Type
+	}
+
+	switch lastBuildStatus {
+	case startedIsoBuild:
 		// if the edge installer already created but wasn't finish yet - check the build status
 		logger.Info("update the edge-installer's compose ID job status")
 		composeStatus, err := r.updateIsoComposeStatus(ctx, logger, osBuild)
@@ -170,21 +189,23 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			logger.Info(fmt.Sprintf("the job ID %s, is still in progress", osBuild.Status.IsoComposeId))
 			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 		}
-	}
 
-	// the build was failed - return with error
-	if lastBuildStatus == failedIsoBuild {
+		return ctrl.Result{Requeue: true}, nil
+
+	case failedIsoBuild:
+		// the build was failed - return with error
 		logger.Error(fmt.Errorf("failed building the edge installer"), "")
 		return ctrl.Result{}, nil
-	}
 
-	// the build was finished successfully - continue with repackaging the iso image
-	if lastBuildStatus == isoBuildDone {
+	case isoBuildDone:
+		// the build was finished successfully - continue with repackaging the iso image
 		// TODO repackaging the iso image with a kickstart file
 		return ctrl.Result{}, nil
-	}
 
-	return ctrl.Result{}, nil
+	default:
+		logger.Error(fmt.Errorf("failed to parse condition status"), "")
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
+	}
 }
 
 func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (composer.ComposeStatusValue, error) {
@@ -268,7 +289,7 @@ func (r *OSBuildReconciler) updateOSBuildConditionStatus(ctx context.Context, lo
 func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) error {
 	customizations := r.createCustomizations(osBuild.Spec.Details.Customizations)
 
-	imageRequest, err := r.createImageRequest(osBuild.Spec.Details.Distribution, &osBuild.Spec.Details.TargetImage, EdgeContainerImgType)
+	imageRequest, err := r.createImageRequest(osBuild.Spec.Details.Distribution, &osBuild.Spec.Details.TargetImage, osbuildv1alpha1.EdgeContainerImageType)
 	if err != nil {
 		return err
 	}
