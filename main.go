@@ -143,8 +143,8 @@ func main() {
 	osBuildCRCreator := manifests.NewOSBuildCRCreator(osBuildConfigRepository, osBuildRepository, scheme, osBuildConfigTemplateRepository, configMapRepository)
 
 	if err = (&controllers.OSBuildConfigReconciler{
-		Client:                  mgr.GetClient(),
 		OSBuildConfigRepository: osBuildConfigRepository,
+		OSBuildRepository:       osBuildRepository,
 		OSBuildCRCreator:        osBuildCRCreator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OSBuildConfig")

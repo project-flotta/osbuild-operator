@@ -18,8 +18,9 @@ package v1alpha1
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
+
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -67,18 +68,23 @@ func (r *OSBuildConfig) ValidateUpdate(old runtime.Object) error {
 
 	err := fmt.Errorf("cannot update immutable fields")
 
-	if r.Spec.Details.TargetImage.Architecture != oldOSBuildConfig.Spec.Details.TargetImage.Architecture {
-		osbuildconfiglog.Error(err, "Architecture is an immutable field and cannot be updated")
-		return err
-	}
-
 	if r.Spec.Details.Distribution != oldOSBuildConfig.Spec.Details.Distribution {
 		osbuildconfiglog.Error(err, "Distribution is an immutable field and cannot be updated")
 		return err
 	}
 
+	if r.Spec.Details.TargetImage.Architecture != oldOSBuildConfig.Spec.Details.TargetImage.Architecture {
+		osbuildconfiglog.Error(err, "Architecture is an immutable field and cannot be updated")
+		return err
+	}
+
 	if r.Spec.Details.TargetImage.TargetImageType != oldOSBuildConfig.Spec.Details.TargetImage.TargetImageType {
 		osbuildconfiglog.Error(err, "TargetImageType is an immutable field and cannot be updated")
+		return err
+	}
+
+	if !reflect.DeepEqual(r.Spec.Details.TargetImage.Repositories, oldOSBuildConfig.Spec.Details.TargetImage.Repositories) {
+		osbuildconfiglog.Error(err, "Repositories is an immutable field and cannot be updated")
 		return err
 	}
 

@@ -36,15 +36,15 @@ func (m *MockOSBuildCRCreator) EXPECT() *MockOSBuildCRCreatorMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockOSBuildCRCreator) Create(ctx context.Context, osBuildConfig *v1alpha1.OSBuildConfig) error {
+func (m *MockOSBuildCRCreator) Create(ctx context.Context, osBuildConfig *v1alpha1.OSBuildConfig, targetImageType v1alpha1.TargetImageType) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, osBuildConfig)
+	ret := m.ctrl.Call(m, "Create", ctx, osBuildConfig, targetImageType)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockOSBuildCRCreatorMockRecorder) Create(ctx, osBuildConfig interface{}) *gomock.Call {
+func (mr *MockOSBuildCRCreatorMockRecorder) Create(ctx, osBuildConfig, targetImageType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOSBuildCRCreator)(nil).Create), ctx, osBuildConfig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOSBuildCRCreator)(nil).Create), ctx, osBuildConfig, targetImageType)
 }

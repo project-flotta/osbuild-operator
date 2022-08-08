@@ -153,8 +153,17 @@ type BuildTriggers struct {
 
 // OSBuildConfigStatus defines the observed state of OSBuildConfig
 type OSBuildConfigStatus struct {
+	//LastKnownUserConfiguration denotes the last user configuration to be compared when a new reconcile call was triggered
+	LastKnownUserConfiguration *UserConfiguration `json:"lastKnownUserConfiguration,omitempty"`
+
+	// Last webhook trigger time stamp
+	LastWebhookTriggerTS string `json:"lastWebhookTriggerTS,omitempty"`
+
 	// LastVersion denotes the number of the last OSBuild CR created for this OSBuildConfig CR
 	LastVersion *int `json:"lastVersion,omitempty"`
+
+	// LastBuildType denotes the TargetImageType of the last OSBuild CR created for this OSBuildConfig CR
+	LastBuildType *TargetImageType `json:"lastBuildType,omitempty"`
 
 	// LastTemplateResourceVersion denotes the version of the last OSBuildConfigTemplate resource used by this
 	// OSBuildConfig (value of OSBuildConfigTemplate's metadata.resourceVersion) to generate an OSBuild.
@@ -163,6 +172,11 @@ type OSBuildConfigStatus struct {
 	// CurrentTemplateResourceVersion denotes the most current version of the OSBuildConfigTemplate resource used by this
 	// OSBuildConfig (value of OSBuildConfigTemplate's metadata.resourceVersion).
 	CurrentTemplateResourceVersion *string `json:"CurrentTemplateResourceVersion,omitempty"`
+}
+
+type UserConfiguration struct {
+	Customizations *Customizations `json:"customizations,omitempty"`
+	Template       *Template       `json:"template,omitempty"`
 }
 
 //+kubebuilder:object:root=true

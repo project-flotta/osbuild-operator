@@ -24,7 +24,7 @@ import (
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 )
 
-var _ = Describe("OSBuildEnvConfig Controller", func() {
+var _ = Describe("OSBuild Controller", func() {
 	const (
 		instanceNamespace = "osbuild"
 		instanceName      = "osbuild_test"
@@ -33,9 +33,11 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		triggeredBy  = "UpdateCR"
 		architecture = "x86_64"
 
-		containerBuildDone    = "containerBuildDone"
-		failedContainerBuild  = "failedContainerBuild"
-		startedContainerBuild = "startedContainerBuild"
+		// Conditions Messages
+		failedToSendPostRequestMsg = "Failed to post a new composer build request"
+		buildJobFinishedMsg        = "Build job was finished successfully"
+		buildJobFailedMsg          = "Build job was failed"
+		buildJobStillRunningMsg    = "Build job is still running"
 	)
 	var (
 		mockCtrl                     *gomock.Controller
@@ -44,7 +46,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		composerClient               *composer.MockClientWithResponsesInterface
 		reconciler                   *controllers.OSBuildReconciler
 		requestContext               context.Context
-		osbuildEdgeContainerInstance osbuildv1alpha1.OSBuild
+		osbuildEdgeContainerInstance *osbuildv1alpha1.OSBuild
 
 		request = ctrl.Request{
 			NamespacedName: types.NamespacedName{
@@ -107,7 +109,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		errNotFound = errors.NewNotFound(schema.GroupResource{}, "Requested resource was not found")
 		errFailed = errors.NewInternalError(fmt.Errorf("Server encounter and error"))
 
-		osbuildEdgeContainerInstance = osbuildv1alpha1.OSBuild{
+		osbuildEdgeContainerInstance = &osbuildv1alpha1.OSBuild{
 			TypeMeta: metav1.TypeMeta{},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      instanceName,
@@ -206,7 +208,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 	AfterEach(func() {
 		osbuildEdgeContainerInstance.DeletionTimestamp = nil
 		osbuildEdgeContainerInstance.Status.Conditions = nil
-		osbuildEdgeContainerInstance.Status.ContainerComposeId = controllers.EmptyComposeID
+		osbuildEdgeContainerInstance.Status.ComposeId = controllers.EmptyComposeID
 	})
 
 	Context("Failure to get OSBuild instance", func() {
@@ -236,7 +238,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		It("Should return Done if the OSBuild CR was deleted", func() {
 			// given
 			osbuildEdgeContainerInstance.DeletionTimestamp = &metav1.Time{Time: time.Now()}
-			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(&osbuildEdgeContainerInstance, nil)
+			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(osbuildEdgeContainerInstance, nil)
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
 			// then
@@ -245,72 +247,78 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		})
 	})
 
-	Context("Create post compose request ", func() {
+	Context("ComposeId is empty so create postCompose request ", func() {
 		BeforeEach(func() {
 			// given
-			osBuildRepository.EXPECT().PatchStatus(requestContext, gomock.Any(), gomock.Any()).Return(nil)
+			osBuildRepository.EXPECT().PatchStatus(requestContext, osbuildEdgeContainerInstance, gomock.Any()).Return(nil)
+			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(osbuildEdgeContainerInstance, nil)
 		})
 
-		Context("from type edge-container", func() {
-			BeforeEach(func() {
-				// given
-				osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(&osbuildEdgeContainerInstance, nil)
-			})
-			It("should done if failed on postCompose with an error", func() {
-				// given
-				composerClient.EXPECT().PostComposeWithResponse(requestContext, gomock.Any()).Return(nil, errFailed)
-				// when
-				result, err := reconciler.Reconcile(requestContext, request)
-				// then
-				Expect(err).To(BeNil())
-				Expect(result).To(Equal(resultLongRequeue))
-			})
-
-			It("should done if failed on postCompose with status code `bad request`", func() {
-				// given
-				composerClient.EXPECT().PostComposeWithResponse(requestContext, gomock.Any()).Return(&composerPostResponseFailed, nil)
-
-				// when
-				result, err := reconciler.Reconcile(requestContext, request)
-				// then
-				Expect(err).To(BeNil())
-				Expect(result).To(Equal(resultLongRequeue))
-			})
-
-			It("should return requeue if succeeded to create a new job", func() {
-				// given
-				composerClient.EXPECT().PostComposeWithResponse(requestContext, gomock.Any()).Return(&composerPostResponseCreated, nil)
-
-				// when
-				result, err := reconciler.Reconcile(requestContext, request)
-				// then
-				Expect(err).To(BeNil())
-				Expect(result).To(Equal(resultLongRequeue))
-				osbuildStatus := osbuildEdgeContainerInstance.Status
-				Expect(osbuildStatus.ContainerComposeId).To(Equal(composerPostResponseCreated.JSON201.Id.String()))
-				Expect(len(osbuildStatus.Conditions)).To(Equal(1))
-				Expect(osbuildStatus.Conditions[0].Status).To(Equal(metav1.ConditionStatus("")))
-				Expect(osbuildStatus.Conditions[0].Type).To(Equal(osbuildv1alpha1.OSBuildConditionType(startedContainerBuild)))
-				Expect(*osbuildStatus.Conditions[0].Message).To(Equal(controllers.EdgeContainerJobStillRunningMsg))
-			})
+		It("should requeue for long duration if failed on postCompose with an error", func() {
+			// given
+			composerClient.EXPECT().PostComposeWithResponse(requestContext, gomock.Any()).Return(nil, errFailed)
+			// when
+			result, err := reconciler.Reconcile(requestContext, request)
+			// then
+			Expect(err).To(BeNil())
+			Expect(result).To(Equal(resultLongRequeue))
+			checkConditionArr(osbuildv1alpha1.ConditionFailed, failedToSendPostRequestMsg, osbuildEdgeContainerInstance.Status.Conditions)
 		})
+
+		It("should requeue for long duration if failed on postCompose with status code `bad request`", func() {
+			// given
+			composerClient.EXPECT().PostComposeWithResponse(requestContext, gomock.Any()).Return(&composerPostResponseFailed, nil)
+
+			// when
+			result, err := reconciler.Reconcile(requestContext, request)
+			// then
+			Expect(err).To(BeNil())
+			Expect(result).To(Equal(resultLongRequeue))
+			checkConditionArr(osbuildv1alpha1.ConditionFailed, "", osbuildEdgeContainerInstance.Status.Conditions)
+		})
+
+		It("should requeue for long duration if succeeded to create a new job", func() {
+			// given
+			composerClient.EXPECT().PostComposeWithResponse(requestContext, gomock.Any()).Return(&composerPostResponseCreated, nil)
+
+			// when
+			result, err := reconciler.Reconcile(requestContext, request)
+			// then
+			Expect(err).To(BeNil())
+			Expect(result).To(Equal(resultLongRequeue))
+			osbuildStatus := osbuildEdgeContainerInstance.Status
+			Expect(osbuildStatus.ComposeId).To(Equal(composerPostResponseCreated.JSON201.Id.String()))
+			checkConditionArr(osbuildv1alpha1.ConditionInProgress, buildJobStillRunningMsg, osbuildEdgeContainerInstance.Status.Conditions)
+		})
+
 	})
 
-	Context("Update edge-container job status", func() {
+	Context("Last Build Status is InProgress", func() {
 		BeforeEach(func() {
-			msg := controllers.EdgeContainerJobStillRunningMsg
-			osbuildEdgeContainerInstance.Status.ContainerComposeId = zeroUuid
-			osbuildEdgeContainerInstance.Status.Conditions = []osbuildv1alpha1.OSBuildCondition{
+			msg := buildJobStillRunningMsg
+			osbuildEdgeContainerInstance.Status.ComposeId = zeroUuid
+			osbuildEdgeContainerInstance.Status.Conditions = []osbuildv1alpha1.Condition{
 				{
-					Type:    startedContainerBuild,
+					Type:    osbuildv1alpha1.ConditionInProgress,
+					Status:  metav1.ConditionTrue,
 					Message: &msg,
+				},
+				{
+					Type:    osbuildv1alpha1.ConditionReady,
+					Status:  metav1.ConditionFalse,
+					Message: nil,
+				},
+				{
+					Type:    osbuildv1alpha1.ConditionFailed,
+					Status:  metav1.ConditionFalse,
+					Message: nil,
 				},
 			}
 
-			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(&osbuildEdgeContainerInstance, nil)
+			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(osbuildEdgeContainerInstance, nil)
 		})
 
-		It("should requeue if failed to getComposerStatus with error", func() {
+		It("should requeue for short duration if failed to getComposerStatus with error", func() {
 			// given
 			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(nil, errFailed)
 
@@ -321,7 +329,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			Expect(result).To(Equal(resultShortRequeue))
 		})
 
-		It("should requeue if failed to getComposerStatus with failure status code", func() {
+		It("should requeue for short duration if failed to getComposerStatus with failure status code", func() {
 			// given
 			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusResponseBadRequest, nil)
 
@@ -332,51 +340,54 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			Expect(result).To(Equal(resultShortRequeue))
 		})
 
-		It("should requeue if job status was changed from Started to pending", func() {
+		It("should requeue for long duration if job status is still pending", func() {
 			// given
 			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusPending, nil)
+			osBuildRepository.EXPECT().PatchStatus(requestContext, osbuildEdgeContainerInstance, gomock.Any()).Return(nil)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
 			// then
 			Expect(err).To(BeNil())
 			Expect(result).To(Equal(resultLongRequeue))
+			checkConditionArr(osbuildv1alpha1.ConditionInProgress, buildJobStillRunningMsg, osbuildEdgeContainerInstance.Status.Conditions)
+
 		})
 
-		It("should requeue if job status was changed from Started to success", func() {
+		It("should requeue if job status was changed from InProgress to success", func() {
 			// given
 			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusDone, nil)
-			osBuildRepository.EXPECT().PatchStatus(requestContext, gomock.Any(), gomock.Any()).Return(nil)
+			osBuildRepository.EXPECT().PatchStatus(requestContext, osbuildEdgeContainerInstance, gomock.Any()).Return(nil)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
 			// then
 			Expect(err).To(BeNil())
 			Expect(result).To(Equal(resultRequeue))
-			Expect(osbuildEdgeContainerInstance.Status.ContainerUrl).To(Equal(buildUrl))
-			Expect(osbuildEdgeContainerInstance.Status.ContainerComposeId).To(Equal(zeroUuid))
+			Expect(osbuildEdgeContainerInstance.Status.AccessUrl).To(Equal(buildUrl))
+			Expect(osbuildEdgeContainerInstance.Status.ComposeId).To(Equal(zeroUuid))
 
-			conditionLen := len(osbuildEdgeContainerInstance.Status.Conditions)
-			lastBuildStatus := osbuildEdgeContainerInstance.Status.Conditions[conditionLen-1].Type
-			Expect(string(lastBuildStatus)).To(Equal(containerBuildDone))
+			checkConditionArr(osbuildv1alpha1.ConditionReady, buildJobFinishedMsg, osbuildEdgeContainerInstance.Status.Conditions)
 		})
 
-		It("should requeue if job status was changed from Started to failed", func() {
+		It("should requeue if job status was changed from InProgress to failed", func() {
 			// given
 			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusFailed, nil)
-			osBuildRepository.EXPECT().PatchStatus(requestContext, gomock.Any(), gomock.Any()).Return(nil)
+			osBuildRepository.EXPECT().PatchStatus(requestContext, osbuildEdgeContainerInstance, gomock.Any()).Return(nil)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
 			// then
 			Expect(err).To(BeNil())
 			Expect(result).To(Equal(resultRequeue))
+			checkConditionArr(osbuildv1alpha1.ConditionFailed, buildJobFailedMsg, osbuildEdgeContainerInstance.Status.Conditions)
+
 		})
 
-		It("should requeue if job status was changed from Started to success but fail on patch status", func() {
+		It("should requeue if job status was changed from InProgress to success but fail on patch status", func() {
 			// given
 			composerClient.EXPECT().GetComposeStatusWithResponse(requestContext, zeroUuid).Return(&composerGetStatusDone, nil)
-			osBuildRepository.EXPECT().PatchStatus(requestContext, gomock.Any(), gomock.Any()).Return(errFailed)
+			osBuildRepository.EXPECT().PatchStatus(requestContext, osbuildEdgeContainerInstance, gomock.Any()).Return(errFailed)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
@@ -389,15 +400,27 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 	Context("Failed to build an image", func() {
 		It("should done", func() {
 			// given
-			msg := controllers.EdgeContainerJobFailedMsg
-			osbuildEdgeContainerInstance.Status.ContainerComposeId = zeroUuid
-			osbuildEdgeContainerInstance.Status.Conditions = []osbuildv1alpha1.OSBuildCondition{
+			msg := buildJobFailedMsg
+			osbuildEdgeContainerInstance.Status.ComposeId = zeroUuid
+			osbuildEdgeContainerInstance.Status.Conditions = []osbuildv1alpha1.Condition{
 				{
-					Type:    failedContainerBuild,
+					Type:    osbuildv1alpha1.ConditionInProgress,
+					Status:  metav1.ConditionFalse,
+					Message: nil,
+				},
+				{
+					Type:    osbuildv1alpha1.ConditionReady,
+					Status:  metav1.ConditionFalse,
+					Message: nil,
+				},
+				{
+					Type:    osbuildv1alpha1.ConditionFailed,
+					Status:  metav1.ConditionTrue,
 					Message: &msg,
 				},
 			}
-			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(&osbuildEdgeContainerInstance, nil)
+
+			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(osbuildEdgeContainerInstance, nil)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
@@ -407,17 +430,29 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		})
 	})
 
-	Context("Container Build is done and target image is edge-container", func() {
+	Context("Container Build is done", func() {
+
 		It("should return done", func() {
 			// given
 			osbuildEdgeContainerInstance.Spec.Details.TargetImage.TargetImageType = osbuildv1alpha1.EdgeContainerImageType
-			osbuildEdgeContainerInstance.Status.ContainerComposeId = zeroUuid
-			osbuildEdgeContainerInstance.Status.Conditions = []osbuildv1alpha1.OSBuildCondition{
+			osbuildEdgeContainerInstance.Status.ComposeId = zeroUuid
+			osbuildEdgeContainerInstance.Status.Conditions = []osbuildv1alpha1.Condition{
 				{
-					Type: containerBuildDone,
+					Type:    osbuildv1alpha1.ConditionInProgress,
+					Status:  metav1.ConditionFalse,
+					Message: nil,
+				},
+				{
+					Type:   osbuildv1alpha1.ConditionReady,
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:    osbuildv1alpha1.ConditionFailed,
+					Status:  metav1.ConditionFalse,
+					Message: nil,
 				},
 			}
-			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(&osbuildEdgeContainerInstance, nil)
+			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(osbuildEdgeContainerInstance, nil)
 
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
@@ -428,4 +463,34 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 	})
 
+	Context("Container Build is empty", func() {
+
+		It("should return done", func() {
+			// given
+			osbuildEdgeContainerInstance.Spec.Details.TargetImage.TargetImageType = osbuildv1alpha1.EdgeContainerImageType
+			osbuildEdgeContainerInstance.Status.ComposeId = zeroUuid
+			osbuildEdgeContainerInstance.Status.Conditions = []osbuildv1alpha1.Condition{}
+			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(osbuildEdgeContainerInstance, nil)
+
+			// when
+			result, err := reconciler.Reconcile(requestContext, request)
+			// then
+			Expect(err).To(BeNil())
+			Expect(result).To(Equal(resultLongRequeue))
+		})
+	})
+
 })
+
+func checkConditionArr(requiredStatus osbuildv1alpha1.ConditionType, requiredMsg string, conditions []osbuildv1alpha1.Condition) {
+	for _, c := range conditions {
+		if c.Type == requiredStatus {
+			Expect(c.Status).To(Equal(metav1.ConditionTrue))
+			if requiredMsg != "" {
+				Expect(*c.Message).To(Equal(requiredMsg))
+			}
+		} else {
+			Expect(c.Status).To(Equal(metav1.ConditionFalse))
+		}
+	}
+}

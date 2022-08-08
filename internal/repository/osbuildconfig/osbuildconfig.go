@@ -11,6 +11,7 @@ import (
 //go:generate mockgen -package=osbuildconfig -destination=mock_osbuildconfig.go . Repository
 type Repository interface {
 	Read(ctx context.Context, name string, namespace string) (*v1alpha1.OSBuildConfig, error)
+	Patch(ctx context.Context, old, new *v1alpha1.OSBuildConfig) error
 	PatchStatus(ctx context.Context, osbuildConfig *v1alpha1.OSBuildConfig, patch *client.Patch) error
 	ListByOSBuildConfigTemplate(ctx context.Context, templateName string, namespace string) ([]v1alpha1.OSBuildConfig, error)
 }
@@ -27,6 +28,11 @@ func (r *CRRepository) Read(ctx context.Context, name string, namespace string) 
 	osBuildConfig := v1alpha1.OSBuildConfig{}
 	err := r.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &osBuildConfig)
 	return &osBuildConfig, err
+}
+
+func (r *CRRepository) Patch(ctx context.Context, old, new *v1alpha1.OSBuildConfig) error {
+	patch := client.MergeFrom(old)
+	return r.client.Patch(ctx, new, patch)
 }
 
 func (r *CRRepository) PatchStatus(ctx context.Context, osbuildConfig *v1alpha1.OSBuildConfig, patch *client.Patch) error {

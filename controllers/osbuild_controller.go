@@ -29,6 +29,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,18 +49,10 @@ var (
 
 const (
 	// Conditions Messages
-	failedToSendPostRequestMsg      = "Failed to post a new composer build request"
-	edgeContainerJobFinishedMsg     = "Edge-container job was finished successfully"
-	EdgeContainerJobFailedMsg       = "Edge-container job was failed"
-	EdgeContainerJobStillRunningMsg = "Edge-container job is still running"
-
-	// OSBuildConditionTypes values
-	containerBuildDone    = "containerBuildDone"
-	failedContainerBuild  = "failedContainerBuild"
-	startedContainerBuild = "startedContainerBuild"
-	isoBuildDone          = "isoBuildDone"
-	failedIsoBuild        = "failedIsoBuild"
-	startedIsoBuild       = "startedIsoBuild"
+	failedToSendPostRequestMsg = "Failed to post a new composer build request"
+	buildJobFinishedMsg        = "Build job was finished successfully"
+	buildJobFailedMsg          = "Build job was failed"
+	buildJobStillRunningMsg    = "Build job is still running"
 
 	EmptyComposeID = ""
 	emptyURL       = ""
@@ -107,41 +100,25 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	if osBuild.Spec.Details != nil {
-		// build edge-container image
-		return r.buildEdgeContainerImage(ctx, logger, osBuild)
-	} else if osBuild.Spec.EdgeInstallerDetails != nil {
-		return r.buildEdgeInstallerImage(ctx, logger, osBuild)
+	if osBuild.Status.ComposeId == EmptyComposeID {
+		// if the image wasn't created yet - schedule a new build
+		logger.Info("create a new image")
+		// TODO: if target image type is edge-installer call postComposeEdgeInstallerImage
+		return r.postComposeNewImage(ctx, logger, osBuild)
 	}
 
-	return ctrl.Result{}, nil
-}
-
-func (r *OSBuildReconciler) buildEdgeContainerImage(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (ctrl.Result, error) {
-	if osBuild.Status.ContainerComposeId == EmptyComposeID {
-		// if the edge container wasn't created yet - schedule a new build
-		logger.Info("create an edge-container")
-		err := r.postComposeEdgeContainer(ctx, logger, osBuild)
-		if err != nil {
-			logger.Error(err, "failed to create an edge-container")
-			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
+	var lastBuildStatus osbuildv1alpha1.ConditionType
+	for _, c := range osBuild.Status.Conditions {
+		if c.Status == metav1.ConditionTrue {
+			lastBuildStatus = c.Type
 		}
-
-		logger.Info("new job created for edge-container, requeue to sample its status")
-		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
-	}
-
-	lastBuildStatus := osbuildv1alpha1.OSBuildConditionType("")
-	if osBuild.Status.Conditions != nil {
-		conditionLen := len(osBuild.Status.Conditions)
-		lastBuildStatus = osBuild.Status.Conditions[conditionLen-1].Type
 	}
 
 	switch lastBuildStatus {
-	case startedContainerBuild:
-		// if the edge container already created but wasn't finish yet - check the build status
-		logger.Info("update the edge-container's compose ID job status")
-		composeStatus, err := r.updateContainerComposeStatus(ctx, logger, osBuild)
+	case osbuildv1alpha1.ConditionInProgress:
+		// if the build already created but wasn't finish yet - check the build status
+		logger.Info("update the compose ID job status")
+		composeStatus, err := r.getOSBuildStatus(ctx, logger, osBuild)
 		if err != nil {
 			logger.Error(err, "failed to get compose ID status")
 			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForShortDuration}, nil
@@ -149,18 +126,19 @@ func (r *OSBuildReconciler) buildEdgeContainerImage(ctx context.Context, logger 
 
 		// the build is still in progress - requeue
 		if composeStatus == composer.ComposeStatusValuePending {
-			logger.Info(fmt.Sprintf("the job ID %s, is still in progress", osBuild.Status.ContainerComposeId))
+			logger.Info(fmt.Sprintf("the job ID %s, is still in progress", osBuild.Status.ComposeId))
 			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 		}
+		// TODO: if composeStatus is success and the target image type is edge installer - repackage it with a kickstart file
 
 		return ctrl.Result{Requeue: true}, nil
 
-	case failedContainerBuild:
+	case osbuildv1alpha1.ConditionFailed:
 		logger.Error(fmt.Errorf("failed to build edge container"), "")
 		return ctrl.Result{}, nil
 
-	case containerBuildDone:
-		logger.Info(fmt.Sprintf("the job ID %s, Finished", osBuild.Status.ContainerComposeId))
+	case osbuildv1alpha1.ConditionReady:
+		logger.Info(fmt.Sprintf("the job ID %s, Finished", osBuild.Status.ComposeId))
 		return ctrl.Result{}, nil
 
 	default:
@@ -169,55 +147,26 @@ func (r *OSBuildReconciler) buildEdgeContainerImage(ctx context.Context, logger 
 	}
 }
 
-func (r *OSBuildReconciler) buildEdgeInstallerImage(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (ctrl.Result, error) {
-	if osBuild.Status.IsoComposeId == EmptyComposeID {
-		// if the edge installer build wasn't created yet - schedule a new build
-		// [ECOPROJECT-917] TODO postComposeEdgeInstaller - schedule a new build
-		return ctrl.Result{}, nil
-	}
-
-	lastBuildStatus := osbuildv1alpha1.OSBuildConditionType("")
-	if osBuild.Status.Conditions != nil {
-		conditionLen := len(osBuild.Status.Conditions)
-		lastBuildStatus = osBuild.Status.Conditions[conditionLen-1].Type
-	}
-
-	switch lastBuildStatus {
-	case startedIsoBuild:
-		// if the edge installer already created but wasn't finish yet - check the build status
-		logger.Info("update the edge-installer's compose ID job status")
-		composeStatus, err := r.updateIsoComposeStatus(ctx, logger, osBuild)
-		if err != nil {
-			logger.Error(err, "failed to get compose ID status")
-			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForShortDuration}, nil
-		}
-
-		// the build is still in progress - requeue
-		if composeStatus == composer.ComposeStatusValuePending {
-			logger.Info(fmt.Sprintf("the job ID %s, is still in progress", osBuild.Status.IsoComposeId))
-			return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
-		}
-
-		return ctrl.Result{Requeue: true}, nil
-
-	case failedIsoBuild:
-		// the build was failed - return with error
-		logger.Error(fmt.Errorf("failed building the edge installer"), "")
-		return ctrl.Result{}, nil
-
-	case isoBuildDone:
-		// the build was finished successfully - continue with repackaging the iso image
-		// TODO repackaging the iso image with a kickstart file
-		return ctrl.Result{}, nil
-
-	default:
-		logger.Error(fmt.Errorf("failed to parse condition status"), "")
-		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
-	}
+func (r *OSBuildReconciler) initConditionArray(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) {
+	osBuild.Status.Conditions = append(osBuild.Status.Conditions, osbuildv1alpha1.Condition{
+		Type:    osbuildv1alpha1.ConditionReady,
+		Status:  metav1.ConditionFalse,
+		Message: nil,
+	},
+		osbuildv1alpha1.Condition{
+			Type:    osbuildv1alpha1.ConditionFailed,
+			Status:  metav1.ConditionFalse,
+			Message: nil,
+		},
+		osbuildv1alpha1.Condition{
+			Type:    osbuildv1alpha1.ConditionInProgress,
+			Status:  metav1.ConditionFalse,
+			Message: nil,
+		})
 }
 
-func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (composer.ComposeStatusValue, error) {
-	composeStatus, err := r.checkComposeIDStatus(ctx, logger, osBuild.Status.ContainerComposeId)
+func (r *OSBuildReconciler) getOSBuildStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (composer.ComposeStatusValue, error) {
+	composeStatus, err := r.getComposeIDStatus(ctx, logger, osBuild.Status.ComposeId)
 	if err != nil {
 		logger.Error(err, "failed to get compose ID status")
 		return "", err
@@ -229,7 +178,7 @@ func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, lo
 		return "", err
 	}
 
-	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, containerBuildDone, failedContainerBuild, startedContainerBuild, buildUrl, emptyURL)
+	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, buildUrl)
 	if err != nil {
 		logger.Error(err, "failed to update OSBuild condition status")
 		return "", err
@@ -274,53 +223,31 @@ func (r *OSBuildReconciler) getBuildUrl(logger logr.Logger, composeStatus *compo
 	return buildUrl, nil
 }
 
-func (r *OSBuildReconciler) updateIsoComposeStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (composer.ComposeStatusValue, error) {
-	composeStatus, err := r.checkComposeIDStatus(ctx, logger, osBuild.Status.IsoComposeId)
-	if err != nil {
-		logger.Error(err, "failed to get compose ID status")
-		return "", err
-	}
-
-	status := composeStatus.Status
-	buildUrl, err := r.getBuildUrl(logger, composeStatus)
-	if err != nil {
-		return "", err
-	}
-
-	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, isoBuildDone, failedIsoBuild, startedIsoBuild, emptyURL, buildUrl)
-	if err != nil {
-		logger.Error(err, "failed to update OSBuild condition status")
-		return "", err
-	}
-	return status, nil
-}
-
 func (r *OSBuildReconciler) updateOSBuildConditionStatus(ctx context.Context, logger logr.Logger,
-	osBuild *osbuildv1alpha1.OSBuild, composeStatus composer.ComposeStatusValue,
-	buildDoneValue osbuildv1alpha1.OSBuildConditionType, buildFailedValue osbuildv1alpha1.OSBuildConditionType,
-	buildStartedValue osbuildv1alpha1.OSBuildConditionType, edgeContainerUrl string, edgeInstallerUrl string) error {
+	osBuild *osbuildv1alpha1.OSBuild, composeStatus composer.ComposeStatusValue, accessUrl string) error {
 
 	if composeStatus == composer.ComposeStatusValueSuccess {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, edgeContainerJobFinishedMsg, buildDoneValue, EmptyComposeID, EmptyComposeID, edgeContainerUrl, edgeInstallerUrl)
+		// TODO: in case the target image type is edge-installer - do nothing
+		return r.updateOSBuildStatus(ctx, logger, osBuild, buildJobFinishedMsg, osbuildv1alpha1.ConditionReady, EmptyComposeID, accessUrl)
 	}
 
 	if composeStatus == composer.ComposeStatusValueFailure {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobFailedMsg, buildFailedValue, EmptyComposeID, EmptyComposeID, edgeContainerUrl, edgeInstallerUrl)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, buildJobFailedMsg, osbuildv1alpha1.ConditionFailed, EmptyComposeID, accessUrl)
 	}
 
 	if composeStatus == composer.ComposeStatusValuePending {
-		return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobStillRunningMsg, buildStartedValue, EmptyComposeID, EmptyComposeID, edgeContainerUrl, edgeInstallerUrl)
+		return r.updateOSBuildStatus(ctx, logger, osBuild, buildJobStillRunningMsg, osbuildv1alpha1.ConditionInProgress, EmptyComposeID, accessUrl)
 	}
 
 	return nil
 }
 
-func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) error {
+func (r *OSBuildReconciler) postComposeNewImage(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (ctrl.Result, error) {
 	customizations := r.createCustomizations(osBuild.Spec.Details.Customizations)
-
 	imageRequest, err := r.createImageRequest(osBuild, osbuildv1alpha1.EdgeContainerImageType)
 	if err != nil {
-		return err
+		logger.Error(err, "failed to create an image request")
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForShortDuration}, nil
 	}
 
 	body := composer.PostComposeJSONRequestBody{
@@ -334,11 +261,13 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 	if err != nil {
 		logger.Error(err, "failed to post a new request")
 
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, failedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, osbuildv1alpha1.ConditionFailed, EmptyComposeID, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
-		return err
+
+		logger.Error(err, "failed to create an image")
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 	}
 
 	if composerResponse.StatusCode() != http.StatusCreated {
@@ -346,56 +275,57 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 		err = fmt.Errorf(errorMsg)
 		logger.Error(err, "postCompose request failed")
 
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, failedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, osbuildv1alpha1.ConditionFailed, EmptyComposeID, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
-		return err
+
+		logger.Error(err, "failed to create an image")
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 	}
 
-	containerComposeId := composerResponse.JSON201.Id.String()
-	logger.Info("postComposer request was sent and trigger a new compose ID ", "container compose ID: ", containerComposeId)
+	composeId := composerResponse.JSON201.Id.String()
+	logger.Info("postComposer request was sent and trigger a new compose ID ", "container compose ID: ", composeId)
 
-	return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobStillRunningMsg, startedContainerBuild, containerComposeId, EmptyComposeID, emptyURL, emptyURL)
+	err = r.updateOSBuildStatus(ctx, logger, osBuild, buildJobStillRunningMsg, osbuildv1alpha1.ConditionInProgress, composeId, emptyURL)
+	if err != nil {
+		logger.Error(err, "failed to create an image")
+		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
+	}
+
+	logger.Info("new job created, requeue to sample its status")
+	return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 }
 
 func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild,
-	msg string, conditionType osbuildv1alpha1.OSBuildConditionType, containerComposeId string, isoComposeId string,
-	edgeContainerUrl string, edgeInstallerUrl string) error {
+	msg string, newConditionStatus osbuildv1alpha1.ConditionType, composeId string, accessUrl string) error {
 	patch := client.MergeFrom(osBuild.DeepCopy())
-	if containerComposeId != EmptyComposeID {
-		osBuild.Status.ContainerComposeId = containerComposeId
+	if composeId != EmptyComposeID {
+		osBuild.Status.ComposeId = composeId
 	}
 
-	if isoComposeId != EmptyComposeID {
-		osBuild.Status.IsoComposeId = isoComposeId
-	}
-
-	if edgeContainerUrl != emptyURL {
-		osBuild.Status.ContainerUrl = edgeContainerUrl
-	}
-
-	if edgeInstallerUrl != emptyURL {
-		osBuild.Status.IsoUrl = edgeInstallerUrl
+	if accessUrl != emptyURL {
+		osBuild.Status.AccessUrl = accessUrl
 	}
 
 	if osBuild.Status.Conditions == nil {
-		osBuild.Status.Conditions = []osbuildv1alpha1.OSBuildCondition{}
+		r.initConditionArray(ctx, logger, osBuild)
 	}
 
-	conditionArrLen := len(osBuild.Status.Conditions)
-	if conditionArrLen > 0 {
-		lastConditionType := osBuild.Status.Conditions[conditionArrLen-1].Type
-		if lastConditionType == conditionType {
-			logger.Info("conditionType did not change ", " lastConditionType ", lastConditionType)
-			return nil
+	conditionsArr := osBuild.Status.Conditions
+	for i := range conditionsArr {
+		if conditionsArr[i].Type == newConditionStatus {
+			if conditionsArr[i].Status != metav1.ConditionTrue {
+				conditionsArr[i].Status = metav1.ConditionTrue
+				conditionsArr[i].Message = &msg
+				conditionsArr[i].LastTransitionTime = &metav1.Time{Time: time.Now()}
+			}
+		} else if conditionsArr[i].Status == metav1.ConditionTrue {
+			conditionsArr[i].Message = nil
+			conditionsArr[i].LastTransitionTime = &metav1.Time{Time: time.Now()}
+			conditionsArr[i].Status = metav1.ConditionFalse
 		}
 	}
-
-	osBuild.Status.Conditions = append(osBuild.Status.Conditions, osbuildv1alpha1.OSBuildCondition{
-		Type:    conditionType,
-		Message: &msg,
-	})
 
 	errPatch := r.OSBuildRepository.PatchStatus(ctx, osBuild, &patch)
 	if errPatch != nil {
@@ -406,7 +336,7 @@ func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr
 	return nil
 }
 
-func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger logr.Logger, composeID string) (*composer.ComposeStatus, error) {
+func (r *OSBuildReconciler) getComposeIDStatus(ctx context.Context, logger logr.Logger, composeID string) (*composer.ComposeStatus, error) {
 	composerResponse, err := r.ComposerClient.GetComposeStatusWithResponse(ctx, composeID)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("failed to get compose ID %s status", composeID))
@@ -414,7 +344,7 @@ func (r *OSBuildReconciler) checkComposeIDStatus(ctx context.Context, logger log
 	}
 
 	if composerResponse.JSON200 != nil {
-		logger.Info(fmt.Sprintf("Image building status %v", composerResponse.JSON200.ImageStatus))
+		logger.Info(fmt.Sprintf("Image building status %v", composerResponse.JSON200.ImageStatus.Status))
 		return composerResponse.JSON200, nil
 
 	}
