@@ -240,13 +240,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 		})
 
-		It("Should return error when failed to get the instance", func() {
+		It("Should requeue when failed to get the instance", func() {
 			// given
 			osBuildEnvConfigRepository.EXPECT().Read(requestContext, instanceName).Return(nil, errFailed)
 			// when
 			result, err := reconciler.Reconcile(requestContext, request)
 			// then
-			Expect(err).To(Equal(errFailed))
+			Expect(err).To(BeNil())
 			Expect(result).To(Equal(resultRequeue))
 		})
 	})
@@ -285,13 +285,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 				instance.ObjectMeta.Finalizers = nil
 			})
 
-			It("Should return error if failed to remove finalizer", func() {
+			It("Should requeue if failed to remove finalizer", func() {
 				// given
 				osBuildEnvConfigRepository.EXPECT().Patch(requestContext, originalInstance, &instance).Return(errFailed)
 				// when
 				result, err := reconciler.Reconcile(requestContext, request)
 				// then
-				Expect(err).To(Equal(errFailed))
+				Expect(err).To(BeNil())
 				Expect(result).To(Equal(resultRequeue))
 			})
 
@@ -321,13 +321,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 				originalInstance = instance.DeepCopy()
 			})
 
-			It("Should return error if it failed to add the finalizer", func() {
+			It("Should requeue if it failed to add the finalizer", func() {
 				// given
 				osBuildEnvConfigRepository.EXPECT().Patch(requestContext, originalInstance, &instance).Return(errFailed)
 				// when
 				result, err := reconciler.Reconcile(requestContext, request)
 				// then
-				Expect(err).To(Equal(errFailed))
+				Expect(err).To(BeNil())
 				Expect(result).To(Equal(resultRequeue))
 			})
 
@@ -375,13 +375,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 			})
 
-			It("Should return an error if failed to get the Route for the Composer Worker API ", func() {
+			It("Should requeue if failed to get the Route for the Composer Worker API ", func() {
 				// given
 				routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errFailed)
 				// when
 				result, err := reconciler.Reconcile(requestContext, request)
 				// then
-				Expect(err).To(Equal(errFailed))
+				Expect(err).To(BeNil())
 				Expect(result).To(Equal(resultRequeue))
 			})
 
@@ -391,13 +391,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errNotFound)
 				})
 
-				It("Should return an error if failed to create the Route for the Composer Worker API", func() {
+				It("Should requeue if failed to create the Route for the Composer Worker API", func() {
 					// given
 					routeRepository.EXPECT().Create(requestContext, &composerWorkerAPIRoute).Return(errFailed)
 					// when
 					result, err := reconciler.Reconcile(requestContext, request)
 					// then
-					Expect(err).To(Equal(errFailed))
+					Expect(err).To(BeNil())
 					Expect(result).To(Equal(resultRequeue))
 				})
 
@@ -426,13 +426,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 					}
 				})
 
-				It("Should return an error if failed to check if the Route for the Composer Worker API is ready", func() {
+				It("Should requeue if failed to check if the Route for the Composer Worker API is ready", func() {
 					//given
 					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errFailed)
 					// when
 					result, err := reconciler.Reconcile(requestContext, request)
 					// then
-					Expect(err).To(Equal(errFailed))
+					Expect(err).To(BeNil())
 					Expect(result).To(Equal(resultRequeue))
 
 				})
@@ -495,24 +495,24 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						instance.ObjectMeta.Finalizers = nil
 					})
 
-					It("Should return an error if it failed to get the certificate", func() {
+					It("Should requeue if it failed to get the certificate", func() {
 						// given
 						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
 						// when
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
-						Expect(err).To(Equal(errFailed))
+						Expect(err).To(BeNil())
 						Expect(result).To(Equal(resultRequeue))
 					})
 
-					It("Should return an error if failed to create the certificate", func() {
+					It("Should requeue if failed to create the certificate", func() {
 						// given
 						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
 						certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(errFailed)
 						// when
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
-						Expect(err).To(Equal(errFailed))
+						Expect(err).To(BeNil())
 						Expect(result).To(Equal(resultRequeue))
 					})
 
@@ -543,13 +543,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 							}
 						})
 
-						It("Should return an error if it failed to get the composer certificate secret", func() {
+						It("Should requeue if it failed to get the composer certificate secret", func() {
 							// given
 							secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
 							// when
 							result, err := reconciler.Reconcile(requestContext, request)
 							// then
-							Expect(err).To(Equal(errFailed))
+							Expect(err).To(BeNil())
 							Expect(result).To(Equal(resultRequeue))
 						})
 
@@ -567,13 +567,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 								updatedComposerCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
 							})
 
-							It("Should return an error if failed to update the secret owner", func() {
+							It("Should requeue if failed to update the secret owner", func() {
 								// given
 								secretRepository.EXPECT().Patch(requestContext, originalComposerCertificateSecret, updatedComposerCertificateSecret).Return(errFailed)
 								// when
 								result, err := reconciler.Reconcile(requestContext, request)
 								// then
-								Expect(err).To(Equal(errFailed))
+								Expect(err).To(BeNil())
 								Expect(result).To(Equal(resultRequeue))
 							})
 
@@ -594,13 +594,11 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 								secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificateSecret, nil)
 							})
 
-							It("Should return an error if PSQL information is not set", func() {
-								// given
-								psqlError := fmt.Errorf("creating a PSQL service is not yet implemented")
+							It("Should requeue if PSQL information is not set", func() {
 								// when
 								result, err := reconciler.Reconcile(requestContext, request)
 								// then
-								Expect(err).To(Equal(psqlError))
+								Expect(err).To(BeNil())
 								Expect(result).To(Equal(resultRequeue))
 
 							})
@@ -620,24 +618,24 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 									}
 								})
 
-								It("Should return an error if failed to get the ConfigMap for the osbuild-composer configuration", func() {
+								It("Should requeue if failed to get the ConfigMap for the osbuild-composer configuration", func() {
 									// given
 									configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errFailed)
 									// when
 									result, err := reconciler.Reconcile(requestContext, request)
 									// then
-									Expect(err).To(Equal(errFailed))
+									Expect(err).To(BeNil())
 									Expect(result).To(Equal(resultRequeue))
 								})
 
-								It("Should return an error if failed to create the ConfigMap for the osbuild-composer configuration", func() {
+								It("Should requeue if failed to create the ConfigMap for the osbuild-composer configuration", func() {
 									// given
 									configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
 									configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 									// when
 									result, err := reconciler.Reconcile(requestContext, request)
 									// then
-									Expect(err).To(Equal(errFailed))
+									Expect(err).To(BeNil())
 									Expect(result).To(Equal(resultRequeue))
 								})
 
@@ -669,24 +667,24 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(&composerConfigConfigMap, nil)
 									})
 
-									It("Should return an error if failed to get the ConfigMap for the proxy configuration", func() {
+									It("Should requeue if failed to get the ConfigMap for the proxy configuration", func() {
 										// given
 										configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errFailed)
 										// when
 										result, err := reconciler.Reconcile(requestContext, request)
 										// then
-										Expect(err).To(Equal(errFailed))
+										Expect(err).To(BeNil())
 										Expect(result).To(Equal(resultRequeue))
 									})
 
-									It("Should return an error if failed to create the ConfigMap for the proxy configuration", func() {
+									It("Should requeue if failed to create the ConfigMap for the proxy configuration", func() {
 										// given
 										configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
 										configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 										// when
 										result, err := reconciler.Reconcile(requestContext, request)
 										// then
-										Expect(err).To(Equal(errFailed))
+										Expect(err).To(BeNil())
 										Expect(result).To(Equal(resultRequeue))
 									})
 
@@ -718,13 +716,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 											configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(&proxyConfigConfigMap, nil)
 										})
 
-										It("Should return an error if failed to get the composer deployment", func() {
+										It("Should requeue if failed to get the composer deployment", func() {
 											// given
 											deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errFailed)
 											// when
 											result, err := reconciler.Reconcile(requestContext, request)
 											// then
-											Expect(err).To(Equal(errFailed))
+											Expect(err).To(BeNil())
 											Expect(result).To(Equal(resultRequeue))
 										})
 
@@ -733,13 +731,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errNotFound)
 											})
 
-											It("Should return an error if failed to create the composer deployment", func() {
+											It("Should requeue if failed to create the composer deployment", func() {
 												// given
 												deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 												// when
 												result, err := reconciler.Reconcile(requestContext, request)
 												// then
-												Expect(err).To(Equal(errFailed))
+												Expect(err).To(BeNil())
 												Expect(result).To(Equal(resultRequeue))
 											})
 
@@ -797,13 +795,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												}
 											})
 
-											It("Should return an error if failed to get the composer api service", func() {
+											It("Should requeue if failed to get the composer api service", func() {
 												// given
 												serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errFailed)
 												// when
 												result, err := reconciler.Reconcile(requestContext, request)
 												// then
-												Expect(err).To(Equal(errFailed))
+												Expect(err).To(BeNil())
 												Expect(result).To(Equal(resultRequeue))
 											})
 
@@ -812,13 +810,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
 												})
 
-												It("Should return an error if failed to create the composer api service", func() {
+												It("Should requeue if failed to create the composer api service", func() {
 													// given
 													serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(errFailed)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
-													Expect(err).To(Equal(errFailed))
+													Expect(err).To(BeNil())
 													Expect(result).To(Equal(resultRequeue))
 												})
 
@@ -870,13 +868,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													}
 												})
 
-												It("Should return an error if failed to get the worker api service", func() {
+												It("Should requeue if failed to get the worker api service", func() {
 													// given
 													serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errFailed)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
-													Expect(err).To(Equal(errFailed))
+													Expect(err).To(BeNil())
 													Expect(result).To(Equal(resultRequeue))
 												})
 
@@ -885,13 +883,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 														serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
 													})
 
-													It("Should return an error if failed to create the worker api service", func() {
+													It("Should requeue if failed to create the worker api service", func() {
 														// given
 														serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(errFailed)
 														// when
 														result, err := reconciler.Reconcile(requestContext, request)
 														// then
-														Expect(err).To(Equal(errFailed))
+														Expect(err).To(BeNil())
 														Expect(result).To(Equal(resultRequeue))
 													})
 
@@ -915,13 +913,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 														serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(&composerWorkerAPIService, nil)
 													})
 
-													It("Should return an error if failed to get the configMap for the ansible config ", func() {
+													It("Should requeue if failed to get the configMap for the ansible config ", func() {
 														// given
 														configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
 														// when
 														result, err := reconciler.Reconcile(requestContext, request)
 														// then
-														Expect(err).To(Equal(errFailed))
+														Expect(err).To(BeNil())
 														Expect(result).To(Equal(resultRequeue))
 													})
 
@@ -930,13 +928,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 															configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
 														})
 
-														It("Should return an error if failed to create the configMap for the ansible config for the worker configuration job", func() {
+														It("Should requeue if failed to create the configMap for the ansible config for the worker configuration job", func() {
 															// given
 															configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 															// when
 															result, err := reconciler.Reconcile(requestContext, request)
 															// then
-															Expect(err).To(Equal(errFailed))
+															Expect(err).To(BeNil())
 															Expect(result).To(Equal(resultRequeue))
 														})
 
@@ -969,13 +967,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 															configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(&workerConfigAnsibleConfigConfigMap, nil)
 														})
 
-														It("Should return an error if failed to get the configMap for the osbuild-worker config", func() {
+														It("Should requeue if failed to get the configMap for the osbuild-worker config", func() {
 															// given
 															configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
 															// when
 															result, err := reconciler.Reconcile(requestContext, request)
 															// then
-															Expect(err).To(Equal(errFailed))
+															Expect(err).To(BeNil())
 															Expect(result).To(Equal(resultRequeue))
 														})
 
@@ -984,13 +982,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
 															})
 
-															It("Should return an error if failed to create the configMap for the osbuild-worker config", func() {
+															It("Should requeue if failed to create the configMap for the osbuild-worker config", func() {
 																// given
 																configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																// when
 																result, err := reconciler.Reconcile(requestContext, request)
 																// then
-																Expect(err).To(Equal(errFailed))
+																Expect(err).To(BeNil())
 																Expect(result).To(Equal(resultRequeue))
 															})
 
@@ -1042,13 +1040,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																}
 															})
 
-															It("Should return an error if failed to get the secret for the osbuild-worker ssh keys", func() {
+															It("Should requeue if failed to get the secret for the osbuild-worker ssh keys", func() {
 																// given
 																secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(nil, errFailed)
 																// when
 																result, err := reconciler.Reconcile(requestContext, request)
 																// then
-																Expect(err).To(Equal(errFailed))
+																Expect(err).To(BeNil())
 																Expect(result).To(Equal(resultRequeue))
 															})
 
@@ -1064,7 +1062,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																	// when
 																	result, err := reconciler.Reconcile(requestContext, request)
 																	// then
-																	Expect(err).To(Equal(sshGenerateError))
+																	Expect(err).To(BeNil())
 																	Expect(result).To(Equal(resultRequeue))
 																})
 
@@ -1073,13 +1071,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																		sshKeyGenerator.EXPECT().GenerateSSHKeyPair().Return(sshPrivateKey, sshPublicKey, nil)
 																	})
 
-																	It("Should return an error if failed to create the secret for the osbuild-worker ssh keys", func() {
+																	It("Should requeue if failed to create the secret for the osbuild-worker ssh keys", func() {
 																		// given
 																		secretRepository.EXPECT().Create(requestContext, workerSSHKeysSecret).Return(errFailed)
 																		// when
 																		result, err := reconciler.Reconcile(requestContext, request)
 																		// then
-																		Expect(err).To(Equal(errFailed))
+																		Expect(err).To(BeNil())
 																		Expect(result).To(Equal(resultRequeue))
 																	})
 
@@ -1100,13 +1098,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																	secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(workerSSHKeysSecret, nil)
 																})
 
-																It("Should return an error if failed to get the VirtualMachine for the internal builder", func() {
+																It("Should requeue if failed to get the VirtualMachine for the internal builder", func() {
 																	// given
 																	virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errFailed)
 																	// when
 																	result, err := reconciler.Reconcile(requestContext, request)
 																	// then
-																	Expect(err).To(Equal(errFailed))
+																	Expect(err).To(BeNil())
 																	Expect(result).To(Equal(resultRequeue))
 																})
 
@@ -1115,13 +1113,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																		virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errNotFound)
 																	})
 
-																	It("Should return an error if failed to create the VirtualMachine for the internal builder", func() {
+																	It("Should requeue if failed to create the VirtualMachine for the internal builder", func() {
 																		// given
 																		virtualMachineRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																		// when
 																		result, err := reconciler.Reconcile(requestContext, request)
 																		// then
-																		Expect(err).To(Equal(errFailed))
+																		Expect(err).To(BeNil())
 																		Expect(result).To(Equal(resultRequeue))
 																	})
 
@@ -1180,13 +1178,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																		}
 																	})
 
-																	It("Should return an error if failed to get the ssh service of the internal builder", func() {
+																	It("Should requeue if failed to get the ssh service of the internal builder", func() {
 																		// given
 																		serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(nil, errFailed)
 																		// when
 																		result, err := reconciler.Reconcile(requestContext, request)
 																		// then
-																		Expect(err).To(Equal(errFailed))
+																		Expect(err).To(BeNil())
 																		Expect(result).To(Equal(resultRequeue))
 																	})
 
@@ -1195,13 +1193,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																			serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(nil, errNotFound)
 																		})
 
-																		It("Should return an error if failed to create the SSH Service for the internal builder", func() {
+																		It("Should requeue if failed to create the SSH Service for the internal builder", func() {
 																			// given
 																			serviceRepository.EXPECT().Create(requestContext, workerSSHService).Return(errFailed)
 																			// when
 																			result, err := reconciler.Reconcile(requestContext, request)
 																			// then
-																			Expect(err).To(Equal(errFailed))
+																			Expect(err).To(BeNil())
 																			Expect(result).To(Equal(resultRequeue))
 																		})
 
@@ -1227,7 +1225,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																			// when
 																			result, err := reconciler.Reconcile(requestContext, request)
 																			// then
-																			Expect(err).To(Equal(errFailed))
+																			Expect(err).To(BeNil())
 																			Expect(result).To(Equal(resultRequeue))
 																		})
 
@@ -1286,13 +1284,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																				}
 																			})
 
-																			It("Should return an error if failed to get the certificate of the internal builder", func() {
+																			It("Should requeue if failed to get the certificate of the internal builder", func() {
 																				// given
 																				certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errFailed)
 																				// when
 																				result, err := reconciler.Reconcile(requestContext, request)
 																				// then
-																				Expect(err).To(Equal(errFailed))
+																				Expect(err).To(BeNil())
 																				Expect(result).To(Equal(resultRequeue))
 																			})
 
@@ -1301,13 +1299,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																					certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errNotFound)
 																				})
 
-																				It("Should return an error if failed to create the Certificate for the internal builder", func() {
+																				It("Should requeue if failed to create the Certificate for the internal builder", func() {
 																					// given
 																					certificateRepository.EXPECT().Create(requestContext, internalBuilderCertificate).Return(errFailed)
 																					// when
 																					result, err := reconciler.Reconcile(requestContext, request)
 																					// then
-																					Expect(err).To(Equal(errFailed))
+																					Expect(err).To(BeNil())
 																					Expect(result).To(Equal(resultRequeue))
 																				})
 
@@ -1336,13 +1334,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																					}
 																				})
 
-																				It("Should return an error if failed to get the secret of the certificate of the internal builder", func() {
+																				It("Should requeue if failed to get the secret of the certificate of the internal builder", func() {
 																					// given
 																					secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errFailed)
 																					// when
 																					result, err := reconciler.Reconcile(requestContext, request)
 																					// then
-																					Expect(err).To(Equal(errFailed))
+																					Expect(err).To(BeNil())
 																					Expect(result).To(Equal(resultRequeue))
 																				})
 
@@ -1360,13 +1358,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																						updatedInternalBuilderCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
 																					})
 
-																					It("Should return an error if failed to own the secret of the Certificate for the internal builder", func() {
+																					It("Should requeue if failed to own the secret of the Certificate for the internal builder", func() {
 																						// given
 																						secretRepository.EXPECT().Patch(requestContext, originalInternalBuilderCertificateSecret, updatedInternalBuilderCertificateSecret).Return(errFailed)
 																						// when
 																						result, err := reconciler.Reconcile(requestContext, request)
 																						// then
-																						Expect(err).To(Equal(errFailed))
+																						Expect(err).To(BeNil())
 																						Expect(result).To(Equal(resultRequeue))
 																					})
 
@@ -1393,13 +1391,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																						secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(internalBuilderCertificateSecret, nil)
 																					})
 
-																					It("Should return an error if failed to get the configMap for the setup playbook of the internal builder", func() {
+																					It("Should requeue if failed to get the configMap for the setup playbook of the internal builder", func() {
 																						// given
 																						configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(nil, errFailed)
 																						// when
 																						result, err := reconciler.Reconcile(requestContext, request)
 																						// then
-																						Expect(err).To(Equal(errFailed))
+																						Expect(err).To(BeNil())
 																						Expect(result).To(Equal(resultRequeue))
 																					})
 
@@ -1408,13 +1406,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																							configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(nil, errNotFound)
 																						})
 
-																						It("Should return an error if failed to create the configMap for the setup playbook for the internal builder", func() {
+																						It("Should requeue if failed to create the configMap for the setup playbook for the internal builder", func() {
 																							// given
 																							configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																							// when
 																							result, err := reconciler.Reconcile(requestContext, request)
 																							// then
-																							Expect(err).To(Equal(errFailed))
+																							Expect(err).To(BeNil())
 																							Expect(result).To(Equal(resultRequeue))
 																						})
 
@@ -1447,13 +1445,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																							configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(internalBuilderSetupPlaybookConfigMap, nil)
 																						})
 
-																						It("Should return an error if failed to get the configMap for the setup inventory of the internal builder", func() {
+																						It("Should requeue if failed to get the configMap for the setup inventory of the internal builder", func() {
 																							// given
 																							configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(nil, errFailed)
 																							// when
 																							result, err := reconciler.Reconcile(requestContext, request)
 																							// then
-																							Expect(err).To(Equal(errFailed))
+																							Expect(err).To(BeNil())
 																							Expect(result).To(Equal(resultRequeue))
 																						})
 
@@ -1462,13 +1460,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																								configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(nil, errNotFound)
 																							})
 
-																							It("Should return an error if failed to create the configMap for the setup inventory for the internal builder", func() {
+																							It("Should requeue if failed to create the configMap for the setup inventory for the internal builder", func() {
 																								// given
 																								configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																								// when
 																								result, err := reconciler.Reconcile(requestContext, request)
 																								// then
-																								Expect(err).To(Equal(errFailed))
+																								Expect(err).To(BeNil())
 																								Expect(result).To(Equal(resultRequeue))
 																							})
 
@@ -1501,13 +1499,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																								configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(internalBuilderSetupInventoryConfigMap, nil)
 																							})
 
-																							It("Should return an error if failed to get the job for the setup of the internal builder", func() {
+																							It("Should requeue if failed to get the job for the setup of the internal builder", func() {
 																								// given
 																								jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(nil, errFailed)
 																								// when
 																								result, err := reconciler.Reconcile(requestContext, request)
 																								// then
-																								Expect(err).To(Equal(errFailed))
+																								Expect(err).To(BeNil())
 																								Expect(result).To(Equal(resultRequeue))
 																							})
 
@@ -1516,13 +1514,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																									jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(nil, errNotFound)
 																								})
 
-																								It("Should return an error if failed to create the job for the setup for the internal builder", func() {
+																								It("Should requeue if failed to create the job for the setup for the internal builder", func() {
 																									// given
 																									jobRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																									// when
 																									result, err := reconciler.Reconcile(requestContext, request)
 																									// then
-																									Expect(err).To(Equal(errFailed))
+																									Expect(err).To(BeNil())
 																									Expect(result).To(Equal(resultRequeue))
 																								})
 
