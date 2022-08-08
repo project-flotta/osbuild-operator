@@ -317,7 +317,7 @@ func (r *OSBuildEnvConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, nil
 		}
 		reqLogger.Error(err, "get failed for KubeFiler", "name", req.Name)
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// now that we have the resource. determine if its alive or pending deletion
@@ -348,7 +348,7 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 
 	created, err := r.addFinalizer(ctx, instance)
 	if err != nil {
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
 	} else if created {
 		reqLogger.Info("Added finalizer")
 		return resultQuickRequeue, nil
@@ -356,7 +356,7 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 
 	created, err = r.ensureComposerWorkerAPIRouteExists(ctx, instance)
 	if err != nil {
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
 	} else if created {
 		reqLogger.Info("Generated Route for the Composer's Worker API")
 		return resultQuickRequeue, nil
@@ -364,21 +364,21 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 
 	composerWorkerAPIRouteHost, err := r.getComposerWorkerAPIRouteHost(ctx)
 	if err != nil {
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
 	} else if composerWorkerAPIRouteHost == nil {
 		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
 	}
 
 	created, err = r.ensureComposerExists(ctx, reqLogger, instance, *composerWorkerAPIRouteHost)
 	if err != nil {
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
 	} else if created {
 		return resultQuickRequeue, nil
 	}
 
 	created, err = r.ensureWorkersExists(ctx, reqLogger, instance, *composerWorkerAPIRouteHost)
 	if err != nil {
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
 	} else if created {
 		return resultQuickRequeue, nil
 	}
@@ -1192,7 +1192,7 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerSetupJob(workerName, workerSS
 func (r *OSBuildEnvConfigReconciler) Finalize(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig) (ctrl.Result, error) {
 	err := r.removeFinalizer(ctx, reqLogger, instance)
 	if err != nil {
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
 	}
 	return ctrl.Result{}, nil
 }
