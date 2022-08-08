@@ -46,26 +46,18 @@ type TriggeredBy string
 // OSBuildStatus defines the observed state of OSBuild
 type OSBuildStatus struct {
 	// The conditions present the latest available observations of a build's current state
-	Conditions []OSBuildCondition `json:"conditions,omitempty"`
+	Conditions []Condition `json:"conditions,omitempty"`
 
 	// +optional
 	Output *string `json:"output,omitempty"`
 
 	// ComposeId presents compose id that was already started, for tracking a job of edge-container
 	// +optional
-	ContainerComposeId string `json:"containerComposeId,omitempty"`
+	ComposeId string `json:"containerComposeId,omitempty"`
 
-	// IsoComposeId presents compose id that was already started, for tracking a job of edge-installe
+	// AccessUrl presents the url of the image in S3 bucket
 	// +optional
-	IsoComposeId string `json:"isoComposeId,omitempty"`
-
-	// ContainerUrl presents the url of the edge-container image
-	// +optional
-	ContainerUrl string `json:"containerUrl,omitempty"`
-
-	// IsoUrl presents the url of the edge-installer image
-	// +optional
-	IsoUrl string `json:"isoUrl,omitempty"`
+	AccessUrl string `json:"accessUrl,omitempty"`
 
 	// +optional
 	// ComposerIso is the URL for the iso that composer build returns before
@@ -73,10 +65,9 @@ type OSBuildStatus struct {
 	ComposerIso string `json:"composer_iso,omitempty"`
 }
 
-type OSBuildCondition struct {
+type Condition struct {
 	// Type of status
-	// +kubebuilder:validation:Enum=startedContainerBuild;failedContainerBuild;containerBuildDone;startedIsoBuild;failedIsoBuild;isoBuildDone;
-	Type OSBuildConditionType `json:"type" description:"type of OSBuildCondition condition"`
+	Type ConditionType `json:"type" description:"type of condition"`
 
 	// Status of the condition, one of True, False, Unknown
 	Status metav1.ConditionStatus `json:"status" description:"status of the condition, one of True, False, Unknown"`
@@ -90,7 +81,17 @@ type OSBuildCondition struct {
 	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty" description:"last time the condition transit from one status to another"`
 }
 
-type OSBuildConditionType string
+type ConditionType string
+
+// These are the resource condition types
+const (
+	// Whether the resource is ready
+	ConditionReady ConditionType = "Ready"
+	// Whether the resource is in progress
+	ConditionInProgress ConditionType = "InProgress"
+	// Whether the resource failed
+	ConditionFailed ConditionType = "Failed"
+)
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status

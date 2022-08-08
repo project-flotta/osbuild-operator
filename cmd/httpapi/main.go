@@ -19,12 +19,8 @@ import (
 	osbuildv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"github.com/project-flotta/osbuild-operator/internal/httpapi"
 	operatorlogger "github.com/project-flotta/osbuild-operator/internal/logger"
-	"github.com/project-flotta/osbuild-operator/internal/manifests"
 	osbuildconfiginternal "github.com/project-flotta/osbuild-operator/internal/osbuildconfig"
-	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuild"
 	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
-	"github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfigtemplate"
 	secretrepository "github.com/project-flotta/osbuild-operator/internal/repository/secret"
 	"github.com/project-flotta/osbuild-operator/restapi"
 )
@@ -64,12 +60,8 @@ func main() {
 
 	osBuildConfigRepository := osbuildconfig.NewOSBuildConfigRepository(c)
 	secretRepository := secretrepository.NewSecretRepository(c)
-	osBuildRepository := osbuild.NewOSBuildRepository(c)
-	osBuildConfigTemplateRepository := osbuildconfigtemplate.NewOSBuildConfigTemplateRepository(c)
-	configMapRepository := configmap.NewConfigMapRepository(c)
-	osBuildCRCreator := manifests.NewOSBuildCRCreator(osBuildConfigRepository, osBuildRepository, scheme, osBuildConfigTemplateRepository, configMapRepository)
 
-	h := restapi.Handler(osbuildconfiginternal.NewOSBuildConfigHandler(osBuildConfigRepository, secretRepository, osBuildCRCreator))
+	h := restapi.Handler(osbuildconfiginternal.NewOSBuildConfigHandler(osBuildConfigRepository, secretRepository))
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%v", httpapi.GlobalHttpAPIConf.HttpPort),
 		ReadHeaderTimeout: time.Minute,

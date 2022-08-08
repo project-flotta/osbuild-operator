@@ -8,29 +8,32 @@ package osbuildconfig
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/project-flotta/osbuild-operator/internal/httpapi"
 	loggerutil "github.com/project-flotta/osbuild-operator/internal/logger"
-	"github.com/project-flotta/osbuild-operator/internal/manifests"
 	repositoryosbuildconfig "github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	"github.com/project-flotta/osbuild-operator/internal/repository/secret"
 	"github.com/project-flotta/osbuild-operator/restapi"
 )
 
+const (
+	webHookAnnotationKey = "last_webhook_trigger_ts"
+	timeFormat           = "2006-01-02 15:04:05"
+)
+
 type OSBuildConfigHandler struct {
 	OSBuildConfigRepository repositoryosbuildconfig.Repository
 	SecretRepository        secret.Repository
-	OSBuildCRCreator        manifests.OSBuildCRCreator
 }
 
 func NewOSBuildConfigHandler(osBuildConfigRepository repositoryosbuildconfig.Repository,
-	secretRepository secret.Repository, osBuildCRCreator manifests.OSBuildCRCreator) *OSBuildConfigHandler {
+	secretRepository secret.Repository) *OSBuildConfigHandler {
 	return &OSBuildConfigHandler{
 		OSBuildConfigRepository: osBuildConfigRepository,
 		SecretRepository:        secretRepository,
-		OSBuildCRCreator:        osBuildCRCreator,
 	}
 }
 func (o *OSBuildConfigHandler) TriggerBuild(w http.ResponseWriter, r *http.Request, namespace string, name string, params restapi.TriggerBuildParams) {
@@ -79,12 +82,19 @@ func (o *OSBuildConfigHandler) TriggerBuild(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err = o.OSBuildCRCreator.Create(r.Context(), osBuildConfig)
+	// add annotation for triggering OSBuildConfig controller reconcile loop
+	osBuildConfigOld := osBuildConfig.DeepCopy()
+	if osBuildConfig.Annotations == nil {
+		osBuildConfig.Annotations = map[string]string{}
+	}
+	osBuildConfig.Annotations[webHookAnnotationKey] = time.Now().Format(timeFormat)
+	err = o.OSBuildConfigRepository.Patch(r.Context(), osBuildConfigOld, osBuildConfig)
+
 	if err != nil {
-		logger.Error(err, "cannot create new OSBuild CR")
+		logger.Error(err, "cannot create trigger OSBuildConfig controller - patching the object was failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	logger.Info("new CR of OSBuild was created")
+	logger.Info("OSBuildConfig controller was triggered")
 	w.WriteHeader(http.StatusOK)
 }

@@ -30,7 +30,7 @@ import (
 
 //go:generate mockgen -package=manifests -source=osbuild.go -destination=mock_osbuildcrcreator.go
 type OSBuildCRCreator interface {
-	Create(ctx context.Context, osBuildConfig *osbuildv1alpha1.OSBuildConfig) error
+	Create(ctx context.Context, osBuildConfig *osbuildv1alpha1.OSBuildConfig, targetImageType osbuildv1alpha1.TargetImageType) error
 }
 
 type OSBuildCreator struct {
@@ -56,7 +56,7 @@ func NewOSBuildCRCreator(osBuildConfigRepository repositoryosbuildconfig.Reposit
 	}
 }
 
-func (o *OSBuildCreator) Create(ctx context.Context, osBuildConfig *osbuildv1alpha1.OSBuildConfig) error {
+func (o *OSBuildCreator) Create(ctx context.Context, osBuildConfig *osbuildv1alpha1.OSBuildConfig, targetImageType osbuildv1alpha1.TargetImageType) error {
 	logger := log.FromContext(ctx)
 
 	lastVersion := osBuildConfig.Status.LastVersion
@@ -91,20 +91,21 @@ func (o *OSBuildCreator) Create(ctx context.Context, osBuildConfig *osbuildv1alp
 
 	var kickstartConfigMap *corev1.ConfigMap
 
-	switch osBuildConfig.Spec.Details.TargetImage.TargetImageType {
-	case osbuildv1alpha1.EdgeContainerImageType:
-		osBuild.Spec.Details = osBuildConfigSpecDetails
-	case osbuildv1alpha1.EdgeInstallerImageType:
+	if targetImageType == osbuildv1alpha1.EdgeInstallerImageType {
 		//[ECOPROJECT-917] TODO: build it by two steps and use two OSBuild instances
 		osBuild.Spec.Details = osBuildConfigSpecDetails
-		kickstartConfigMap, err = o.createKickstartConfigMap(ctx, osBuildConfig, osConfigTemplate, osBuildName, osBuild.Namespace)
-		if err != nil {
-			return err
+		if osConfigTemplate != nil {
+			kickstartConfigMap, err = o.createKickstartConfigMap(ctx, osBuildConfig, osConfigTemplate, osBuildName, osBuild.Namespace)
+			if err != nil {
+				return err
+			}
+			// TODO: uncomment when the edge-installer creation is activated
+			//if kickstartConfigMap != nil {
+			//	osBuild.Spec.EdgeInstallerDetails.Kickstart = &osbuildv1alpha1.NameRef{Name: osBuildName}
+			//}
 		}
-		// TODO: uncomment when the edge-installer creation is activated
-		//if kickstartConfigMap != nil {
-		//	osBuild.Spec.EdgeInstallerDetails.Kickstart = &osbuildv1alpha1.NameRef{Name: osBuildName}
-		//}
+	} else {
+		osBuild.Spec.Details = osBuildConfigSpecDetails
 	}
 
 	// Set the owner of the osBuild CR to be osBuildConfig in order to manage lifecycle of the osBuild CR.

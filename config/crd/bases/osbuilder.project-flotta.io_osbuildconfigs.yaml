@@ -245,10 +245,97 @@ spec:
                   of OSBuildConfigTemplate's metadata.resourceVersion) to generate
                   an OSBuild.
                 type: string
+              lastBuildType:
+                description: LastBuildType denotes the TargetImageType of the last
+                  OSBuild CR created for this OSBuildConfig CR
+                type: string
+              lastKnownUserConfiguration:
+                description: LastKnownUserConfiguration denotes the last user configuration
+                  to be compared when a new reconcile call was triggered
+                properties:
+                  customizations:
+                    description: Customizations defines the changes to be applied
+                      on top of the base image
+                    properties:
+                      packages:
+                        description: Packages is a list of RPM packages to install
+                          (optional)
+                        items:
+                          type: string
+                        type: array
+                      services:
+                        description: Services defines the services to enable or disable
+                          (optional)
+                        properties:
+                          disabled:
+                            description: List of services to disable by default
+                            items:
+                              type: string
+                            type: array
+                          enabled:
+                            description: List of services to enable by default
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      users:
+                        description: Users is the list of Users to add to the image
+                          (optional)
+                        items:
+                          description: User defines a single user to be configured
+                          properties:
+                            groups:
+                              description: Groups is the groups to add the user to
+                                (optional)
+                              items:
+                                type: string
+                              type: array
+                            key:
+                              description: Key is the user's SSH public key (optional)
+                              type: string
+                            name:
+                              description: Name is the username for the new user
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                    type: object
+                  template:
+                    description: Template contains OSBuildConfigTemplate configuration
+                    properties:
+                      osBuildConfigTemplateRef:
+                        description: OSBuildConfigTemplateRef specifies the name of
+                          OSBuildConfigTemplate resource
+                        type: string
+                      parameters:
+                        description: Parameters list parameter values for OS Build
+                          Config processing
+                        items:
+                          description: ParameterValue specifies a name-value pair
+                          properties:
+                            name:
+                              description: Name of a parameter
+                              type: string
+                            value:
+                              description: Value of a parameter
+                              type: string
+                          required:
+                          - name
+                          - value
+                          type: object
+                        type: array
+                    required:
+                    - osBuildConfigTemplateRef
+                    type: object
+                type: object
               lastVersion:
                 description: LastVersion denotes the number of the last OSBuild CR
                   created for this OSBuildConfig CR
                 type: integer
+              lastWebhookTriggerTS:
+                description: Last webhook trigger time stamp
+                type: string
             type: object
         type: object
     served: true

@@ -16,7 +16,6 @@ import (
 
 	"github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"github.com/project-flotta/osbuild-operator/internal/httpapi"
-	"github.com/project-flotta/osbuild-operator/internal/manifests"
 	repositoryosbuildconfig "github.com/project-flotta/osbuild-operator/internal/repository/osbuildconfig"
 	repositorysecret "github.com/project-flotta/osbuild-operator/internal/repository/secret"
 	"github.com/project-flotta/osbuild-operator/restapi"
@@ -46,7 +45,6 @@ var _ = Describe("OSBuildConfig rest API", func() {
 
 		osBuildConfigRepository *repositoryosbuildconfig.MockRepository
 		secretRepository        *repositorysecret.MockRepository
-		osBuildCRCreator        *manifests.MockOSBuildCRCreator
 		responseWriter          *httptest.ResponseRecorder
 		osbuildConfigHandler    *OSBuildConfigHandler
 		req                     *http.Request
@@ -55,9 +53,8 @@ var _ = Describe("OSBuildConfig rest API", func() {
 	BeforeEach(func() {
 		mockCtrl = gomock.NewController(GinkgoT())
 		osBuildConfigRepository = repositoryosbuildconfig.NewMockRepository(mockCtrl)
-		osBuildCRCreator = manifests.NewMockOSBuildCRCreator(mockCtrl)
 		secretRepository = repositorysecret.NewMockRepository(mockCtrl)
-		osbuildConfigHandler = NewOSBuildConfigHandler(osBuildConfigRepository, secretRepository, osBuildCRCreator)
+		osbuildConfigHandler = NewOSBuildConfigHandler(osBuildConfigRepository, secretRepository)
 
 		secret = corev1.Secret{
 			ObjectMeta: v1.ObjectMeta{
@@ -118,13 +115,17 @@ var _ = Describe("OSBuildConfig rest API", func() {
 			// given
 			osBuildConfigRepository.EXPECT().Read(req.Context(), OSBuildConfigName, Namespace).Return(&osbuildConfig, nil)
 			secretRepository.EXPECT().Read(req.Context(), SecretName, Namespace).Return(&secret, nil)
+			osBuildConfigOld := osbuildConfig.DeepCopy()
+			osBuildConfigRepository.EXPECT().Patch(req.Context(), osBuildConfigOld, gomock.Any()).Return(nil)
 
-			osBuildCRCreator.EXPECT().Create(req.Context(), &osbuildConfig).Return(nil)
 			// when
 			osbuildConfigHandler.TriggerBuild(responseWriter, req, Namespace, OSBuildConfigName, params)
 
 			// then
 			Expect(responseWriter.Result().StatusCode).To(Equal(http.StatusOK))
+			Expect(osbuildConfig.Annotations).ToNot(BeNil())
+			Expect(len(osbuildConfig.Annotations)).To(Equal(1))
+			Expect(osbuildConfig.Annotations[webHookAnnotationKey]).ToNot(BeNil())
 
 		})
 
@@ -208,8 +209,10 @@ var _ = Describe("OSBuildConfig rest API", func() {
 			// given
 			osBuildConfigRepository.EXPECT().Read(req.Context(), OSBuildConfigName, Namespace).Return(&osbuildConfig, nil)
 			secretRepository.EXPECT().Read(req.Context(), SecretName, Namespace).Return(&secret, nil)
+			osBuildConfigOld := osbuildConfig.DeepCopy()
 			returnErr := errors.NewBadRequest("test")
-			osBuildCRCreator.EXPECT().Create(gomock.Any(), &osbuildConfig).Return(returnErr)
+			osBuildConfigRepository.EXPECT().Patch(req.Context(), osBuildConfigOld, gomock.Any()).Return(returnErr)
+
 			// when
 			osbuildConfigHandler.TriggerBuild(responseWriter, req, Namespace, OSBuildConfigName, params)
 

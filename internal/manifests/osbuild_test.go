@@ -132,7 +132,7 @@ var _ = Describe("OSBuild creation", func() {
 			osBuildRepository.EXPECT().Create(ctx, &expectedOSBuild)
 
 			// when
-			err := creator.Create(ctx, &osBuildConfig)
+			err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeContainerImageType)
 
 			//then
 			Expect(err).ToNot(HaveOccurred())
@@ -153,7 +153,7 @@ var _ = Describe("OSBuild creation", func() {
 			osBuildRepository.EXPECT().Create(ctx, &expectedOSBuild)
 
 			// when
-			err := creator.Create(ctx, &osBuildConfig)
+			err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeContainerImageType)
 
 			//then
 			Expect(err).ToNot(HaveOccurred())
@@ -167,7 +167,7 @@ var _ = Describe("OSBuild creation", func() {
 			osBuildConfigRepository.EXPECT().PatchStatus(ctx, cp, gomock.Any()).Return(fmt.Errorf("boom"))
 
 			// when
-			err := creator.Create(ctx, &osBuildConfig)
+			err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeContainerImageType)
 
 			//then
 			Expect(err).To(HaveOccurred())
@@ -180,7 +180,7 @@ var _ = Describe("OSBuild creation", func() {
 			osBuildRepository.EXPECT().Create(ctx, &expectedOSBuild).Return(fmt.Errorf("boom"))
 
 			// when
-			err := creator.Create(ctx, &osBuildConfig)
+			err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeContainerImageType)
 
 			//then
 			Expect(err).To(HaveOccurred())
@@ -236,7 +236,7 @@ var _ = Describe("OSBuild creation", func() {
 				Return(nil, errors.NewNotFound(schema.GroupResource{}, templateName))
 
 			// when
-			err := creator.Create(ctx, &osBuildConfig)
+			err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeContainerImageType)
 
 			//then
 			Expect(err).To(HaveOccurred())
@@ -274,7 +274,7 @@ var _ = Describe("OSBuild creation", func() {
 				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).ToNot(HaveOccurred())
@@ -314,7 +314,7 @@ var _ = Describe("OSBuild creation", func() {
 				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).ToNot(HaveOccurred())
@@ -349,7 +349,7 @@ var _ = Describe("OSBuild creation", func() {
 				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).ToNot(HaveOccurred())
@@ -397,7 +397,7 @@ var _ = Describe("OSBuild creation", func() {
 				osBuildRepository.EXPECT().Create(ctx, matchers.NewOSBuildMatcher(&expectedOSBuild))
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).ToNot(HaveOccurred())
@@ -417,7 +417,7 @@ var _ = Describe("OSBuild creation", func() {
 					Return(nil, fmt.Errorf("boom"))
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).To(HaveOccurred())
@@ -439,7 +439,7 @@ var _ = Describe("OSBuild creation", func() {
 				configMapRepository.EXPECT().Create(ctx, &kickstartMap).Return(fmt.Errorf("boom"))
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).To(HaveOccurred())
@@ -474,7 +474,7 @@ var _ = Describe("OSBuild creation", func() {
 				osBuildConfigRepository.EXPECT().PatchStatus(ctx, matchers.NewOSBuildConfigStatusMatcher(cp), gomock.Any())
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).To(HaveOccurred())
@@ -496,7 +496,7 @@ var _ = Describe("OSBuild creation", func() {
 					Return(nil, fmt.Errorf("boom"))
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).To(HaveOccurred())
@@ -523,7 +523,7 @@ var _ = Describe("OSBuild creation", func() {
 					Return(&kickstartTemplateCM, nil)
 
 				// when
-				err := creator.Create(ctx, &osBuildConfig)
+				err := creator.Create(ctx, &osBuildConfig, v1alpha1.EdgeInstallerImageType)
 
 				//then
 				Expect(err).To(HaveOccurred())
