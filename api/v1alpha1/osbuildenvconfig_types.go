@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	buildv1 "github.com/openshift/api/build/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cdiv1v1beta1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -87,10 +88,10 @@ type WorkerConfig struct {
 type VMWorkerConfig struct {
 	// Architecture defines the architecture of the worker machine
 	// +kubebuilder:validation:Optional
-	Architecture *Architecture `json:"architecture"`
-	// ImageURL is the location of the rhel qcow2 file to run on the worker
+	Architecture *Architecture `json:"architecture,omitempty"`
+	// DataVolumeSource is the src of the data for the Worker VM RootFS
 	// +kubebuilder:validation:Required
-	ImageURL string `json:"imageURL"`
+	DataVolumeSource cdiv1v1beta1.DataVolumeSource `json:"dataVolumeSource"`
 }
 
 type ExternalWorkerConfig struct {

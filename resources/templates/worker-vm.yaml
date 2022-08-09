@@ -25,9 +25,6 @@ spec:
           requests:
             storage: 100Gi
           volumeMode: Filesystem
-      source:
-        http:
-          url: {{ .ImageURL }}
   runStrategy: Always
   template:
     metadata:

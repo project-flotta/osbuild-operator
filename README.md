@@ -50,7 +50,11 @@ Please note that the provisioning of the OSBuild Operator will also provision th
 
   `make run`
 
-## Store rhel image in accessible endpoint
+## Images for Worker VMs
+There are two ways to configure the base images of the Worker VMs:
+
+### Provide a RHEL QCOW2 Image
+To Provide a RHEL QCOW2 Image you will need to store it in an accessible endpoint and provide its link in the OSBuildEnvConfig
 - Deploy nexus operator by following the instruction here: https://github.com/RedHatGov/nexus-operator#installation
 - Deploy a nexus instance:
   ```bash
@@ -72,6 +76,32 @@ Please note that the provisioning of the OSBuild Operator will also provision th
 - Upload the rhel qcow2 image
   ```bash
   nexus3 upload rhel-8.6-x86_64-kvm.qcow2 disk-images
+  ```
+- Set the URL in the vmWorkerConfig field of the OSBuildEnvConfig CR
+  ```yaml
+  worker:
+  - name: WorkerName
+    vmWorkerConfig:
+      dataVolumeSource:
+        http:
+          url: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.6-x86_64-kvm.qcow2"
+  ```
+
+### Use RHEL golden Images of CNV
+To use RHEL golden Images of CNV you will need to create a secret containing your credentials for `registry.redhat.io` provide the secret reference in the OSBuildEnvConfig
+- Create a Secret containing your credentials for `registry.redhat.io`
+  ```bash
+  oc create secret generic osbuild-registry-redhat-io-credentials -n osbuild --from-literal=accessKeyId=<Username> --from-literal=secretKey=<Password>
+  ```
+- Set the ImageRegistrySecretReference field of the OSBuildEnvConfig CR
+  ```yaml
+  worker:
+  - name: WorkerName
+    vmWorkerConfig:
+      dataVolumeSource:
+        registry:
+          url: docker://registry.redhat.io/rhel8/rhel-guest-image:8.6.0
+          secretRef: osbuild-registry-redhat-io-credentials
   ```
 
 ## Create generic S3 service
@@ -170,13 +200,18 @@ Currently the controller does not support creating the PSQL server on its own, m
   ```bash
   oc create secret generic external-builder-ssh-pair --from-file=config/creating_env/ssh-privatekey --from-file=config/creating_env/ssh-publickey -n osbuild
   ```
+- The example External worker uses a RHEL Golden imageas defined for the [VM Worker](README.md#use-rhel-golden-images-of-cnv)
 - Deploy the VM
   ```bash
   oc apply -n osbuild -f config/creating_env/external-worker-vm.yaml
   ```
+- Wait for the VM to reach Ready state
+  ```bash
+  oc wait --for=condition=Ready -n osbuild virtualmachine.kubevirt.io/external-builder --timeout=5m
+  ```
 - Get VM Address
   ```bash
-  oc get vmi external-builder -o jsonpath={.status.interfaces[0].ipAddress}
+  oc get vmi -n osbuild external-builder -o jsonpath={.status.interfaces[0].ipAddress}
   ```
 
 ## Create OSBuildEnvConfig singleton CR
