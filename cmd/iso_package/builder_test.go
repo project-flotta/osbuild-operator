@@ -3,7 +3,7 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -46,7 +46,7 @@ var _ = Describe("Config", Ordered, func() {
 	})
 
 	checkIsoImage := func(path string) {
-		dirName, err := ioutil.TempDir("/tmp/", "isounittest")
+		dirName, err := os.MkdirTemp("/tmp/", "isounittest")
 		Expect(err).NotTo(HaveOccurred())
 		f, err := os.Open(path)
 		Expect(err).NotTo(HaveOccurred())
@@ -62,12 +62,12 @@ var _ = Describe("Config", Ordered, func() {
 		isolinux := filepath.Join(dirName, "ISOLINUX/ISOLINUX.CFG")
 		Expect(isolinux).Should(BeAnExistingFile())
 
-		content, err := ioutil.ReadFile(isolinux)
+		content, err := os.ReadFile(isolinux)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(content).To(ContainSubstring("cdrom:/init.ks"))
 
 		grub := filepath.Join(dirName, "EFI/BOOT/GRUB.CFG")
-		content, err = ioutil.ReadFile(grub)
+		content, err = os.ReadFile(grub)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(content).To(ContainSubstring("cdrom:/init.ks"))
 	}
@@ -105,8 +105,15 @@ var _ = Describe("Config", Ordered, func() {
 func IsoServer() (*http.Server, int) {
 	var isoFile string
 	rootdir := "../../testdata/"
+	var files []os.FileInfo
+	var entries []os.DirEntry
 
-	files, err := ioutil.ReadDir(rootdir)
+	entries, err := os.ReadDir(rootdir)
+	files = make([]fs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, _ := entry.Info()
+		files = append(files, info)
+	}
 	Expect(err).NotTo(HaveOccurred())
 	for _, x := range files {
 		parts := strings.Split(x.Name(), ".")

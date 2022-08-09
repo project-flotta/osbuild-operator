@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -230,7 +229,7 @@ func createClient() (composer.ClientWithResponsesInterface, error) {
 	tlsKey := path.Join(osBuildCertsDir, "tls.key")
 	var tlsConfig *tls.Config
 
-	caCert, err := ioutil.ReadFile(ca)
+	caCert, err := os.ReadFile(ca)
 	if err != nil {
 		return nil, err
 	}

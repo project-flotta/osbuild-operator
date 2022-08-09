@@ -1,7 +1,6 @@
 package main_test
 
 import (
-	"io/ioutil"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -18,7 +17,7 @@ var _ = Describe("Grub utilities", func() {
 	)
 
 	BeforeEach(func() {
-		file, err := ioutil.TempFile("/tmp/", "grub.cfg")
+		file, err := os.CreateTemp("/tmp/", "grub.cfg")
 		Expect(err).NotTo(HaveOccurred())
 		tempPath = file.Name()
 	})
