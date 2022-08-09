@@ -12,7 +12,10 @@ spec:
   - name: builder-1
     vmWorkerConfig:
       architecture: x86_64
-      imageURL: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.6-x86_64-kvm.qcow2"
+      dataVolumeSource:
+        registry:
+          url: docker://registry.redhat.io/rhel8/rhel-guest-image:8.6.0
+          secretRef: osbuild-registry-redhat-io-credentials
   - name: builder-2
     externalWorkerConfig:
       address: $EXTERNAL_WORKER_IP

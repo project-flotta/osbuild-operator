@@ -239,7 +239,6 @@ type workerSetupInventoryParameters struct {
 type workerVMParameters struct {
 	Namespace         string
 	Name              string
-	ImageURL          string
 	Hostname          string
 	Username          string
 	SSHKeysSecretName string
@@ -558,16 +557,7 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerExists(ctx context.Context, req
 			return true, nil
 		}
 
-		vmParameters := workerVMParameters{
-			Namespace:         conf.GlobalConf.WorkingNamespace,
-			Name:              worker.Name,
-			ImageURL:          worker.VMWorkerConfig.ImageURL,
-			Hostname:          worker.Name,
-			Username:          workerVMUsername,
-			SSHKeysSecretName: workerSSHKeysSecretName,
-		}
-
-		created, err = r.ensureWorkerVMExists(ctx, &vmParameters, instance)
+		created, err = r.ensureWorkerVMExists(ctx, worker, instance)
 		if err != nil {
 			return false, err
 		} else if created {
@@ -993,14 +983,14 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerSSHKeysSecret(instance *osbui
 	return secret, controllerutil.SetControllerReference(instance, secret, r.Scheme)
 }
 
-func (r *OSBuildEnvConfigReconciler) ensureWorkerVMExists(ctx context.Context, vmParameters *workerVMParameters, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
-	_, err := r.VirtualMachineRepository.Read(ctx, vmParameters.Name, conf.GlobalConf.WorkingNamespace)
+func (r *OSBuildEnvConfigReconciler) ensureWorkerVMExists(ctx context.Context, worker *osbuildv1alpha1.WorkerConfig, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
+	_, err := r.VirtualMachineRepository.Read(ctx, worker.Name, conf.GlobalConf.WorkingNamespace)
 	if err == nil {
 		return false, nil
 	}
 
 	if errors.IsNotFound(err) {
-		workerVm, err := r.generateWorkerVM(vmParameters, instance)
+		workerVm, err := r.generateWorkerVM(worker, instance)
 		if err != nil {
 			return false, err
 		}
@@ -1016,7 +1006,15 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkerVMExists(ctx context.Context, v
 	return false, err
 }
 
-func (r *OSBuildEnvConfigReconciler) generateWorkerVM(vmParameters *workerVMParameters, instance *osbuildv1alpha1.OSBuildEnvConfig) (*kubevirtv1.VirtualMachine, error) {
+func (r *OSBuildEnvConfigReconciler) generateWorkerVM(worker *osbuildv1alpha1.WorkerConfig, instance *osbuildv1alpha1.OSBuildEnvConfig) (*kubevirtv1.VirtualMachine, error) {
+	vmParameters := &workerVMParameters{
+		Namespace:         conf.GlobalConf.WorkingNamespace,
+		Name:              worker.Name,
+		Hostname:          worker.Name,
+		Username:          workerVMUsername,
+		SSHKeysSecretName: workerSSHKeysSecretName,
+	}
+
 	buf, err := templates.LoadFromTemplateFile(workerVMTemplateFile, vmParameters)
 	if err != nil {
 		return nil, err
@@ -1034,6 +1032,8 @@ func (r *OSBuildEnvConfigReconciler) generateWorkerVM(vmParameters *workerVMPara
 	if !ok {
 		return nil, fmt.Errorf("failed to cast into a VirtualMachine object")
 	}
+
+	vm.Spec.DataVolumeTemplates[0].Spec.Source = &worker.VMWorkerConfig.DataVolumeSource
 
 	return vm, controllerutil.SetControllerReference(instance, vm, r.Scheme)
 }

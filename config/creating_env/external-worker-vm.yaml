@@ -25,8 +25,9 @@ spec:
             storage: 100Gi
           volumeMode: Filesystem
       source:
-        http:
-          url: "http://nexus-osbuild:8081/repository/disk-images/rhel-8.6-x86_64-kvm.qcow2"
+        registry:
+          url: "docker://registry.redhat.io/rhel8/rhel-guest-image:8.6.0"
+          secretRef: osbuild-registry-redhat-io-credentials
   runStrategy: Always
   template:
     metadata:

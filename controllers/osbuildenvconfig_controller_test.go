@@ -27,6 +27,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	osbuildv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	"kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
@@ -183,7 +184,11 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						Name: internalBuilderName,
 						VMWorkerConfig: &osbuildv1alpha1.VMWorkerConfig{
 							Architecture: &internalBuilderArchitecture,
-							ImageURL:     internalBuilderImageUrl,
+							DataVolumeSource: v1beta1.DataVolumeSource{
+								HTTP: &v1beta1.DataVolumeSourceHTTP{
+									URL: internalBuilderImageUrl,
+								},
+							},
 						},
 					},
 					{
