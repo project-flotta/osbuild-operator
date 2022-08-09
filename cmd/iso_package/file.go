@@ -5,7 +5,7 @@ package main
 
 import (
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path"
 )
@@ -39,6 +39,7 @@ func File(src, dst string) error {
 func Dir(src string, dst string) error {
 	var err error
 	var fds []os.FileInfo
+	var entries []os.DirEntry
 	var srcinfo os.FileInfo
 
 	if srcinfo, err = os.Stat(src); err != nil {
@@ -49,9 +50,18 @@ func Dir(src string, dst string) error {
 		return err
 	}
 
-	if fds, err = ioutil.ReadDir(src); err != nil {
+	if entries, err = os.ReadDir(src); err != nil {
 		return err
 	}
+	fds = make([]fs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		fds = append(fds, info)
+	}
+
 	for _, fd := range fds {
 		srcfp := path.Join(src, fd.Name())
 		dstfp := path.Join(dst, fd.Name())

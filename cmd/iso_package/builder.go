@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -40,7 +39,7 @@ func (c *Builder) Run() (string, error) {
 		return "", err
 	}
 
-	dirName, err := ioutil.TempDir("/tmp/", tmpFolderPrefix)
+	dirName, err := os.MkdirTemp("/tmp/", tmpFolderPrefix)
 	if err != nil {
 		return "", err
 	}
