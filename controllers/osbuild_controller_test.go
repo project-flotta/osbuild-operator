@@ -28,6 +28,10 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 	const (
 		instanceNamespace = "osbuild"
 		instanceName      = "osbuild_test"
+
+		containerBuildDone    = "containerBuildDone"
+		failedContainerBuild  = "failedContainerBuild"
+		startedContainerBuild = "startedContainerBuild"
 	)
 	var (
 		mockCtrl          *gomock.Controller
@@ -278,7 +282,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			Expect(osbuildStatus.ContainerComposeId).To(Equal(composerPostResponseCreated.JSON201.Id.String()))
 			Expect(len(osbuildStatus.Conditions)).To(Equal(1))
 			Expect(osbuildStatus.Conditions[0].Status).To(Equal(metav1.ConditionStatus("")))
-			Expect(osbuildStatus.Conditions[0].Type).To(Equal(osbuildv1alpha1.OSBuildConditionType(controllers.StartedContainerBuild)))
+			Expect(osbuildStatus.Conditions[0].Type).To(Equal(osbuildv1alpha1.OSBuildConditionType(startedContainerBuild)))
 			Expect(*osbuildStatus.Conditions[0].Message).To(Equal(controllers.EdgeContainerJobStillRunningMsg))
 		})
 	})
@@ -289,7 +293,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			osbuildInstance.Status.ContainerComposeId = zeroUuid
 			osbuildInstance.Status.Conditions = []osbuildv1alpha1.OSBuildCondition{
 				{
-					Type:    controllers.StartedContainerBuild,
+					Type:    startedContainerBuild,
 					Message: &msg,
 				},
 			}
@@ -345,7 +349,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 			conditionLen := len(osbuildInstance.Status.Conditions)
 			lastBuildStatus := osbuildInstance.Status.Conditions[conditionLen-1].Type
-			Expect(string(lastBuildStatus)).To(Equal(controllers.ContainerBuildDone))
+			Expect(string(lastBuildStatus)).To(Equal(containerBuildDone))
 		})
 
 		It("should requeue if job status was changed from Started to failed", func() {
@@ -380,7 +384,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			osbuildInstance.Status.ContainerComposeId = zeroUuid
 			osbuildInstance.Status.Conditions = []osbuildv1alpha1.OSBuildCondition{
 				{
-					Type:    controllers.FailedContainerBuild,
+					Type:    failedContainerBuild,
 					Message: &msg,
 				},
 			}
@@ -401,7 +405,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 			osbuildInstance.Status.ContainerComposeId = zeroUuid
 			osbuildInstance.Status.Conditions = []osbuildv1alpha1.OSBuildCondition{
 				{
-					Type: controllers.ContainerBuildDone,
+					Type: containerBuildDone,
 				},
 			}
 			osBuildRepository.EXPECT().Read(requestContext, instanceName, instanceNamespace).Return(&osbuildInstance, nil)
