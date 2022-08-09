@@ -46,9 +46,9 @@ const (
 	EdgeContainerJobStillRunningMsg = "Edge-container job is still running"
 
 	// OSBuildConditionTypes values
-	ContainerBuildDone    = "ContainerBuildDone"
-	FailedContainerBuild  = "FailedContainerBuild"
-	StartedContainerBuild = "StartedContainerBuild"
+	containerBuildDone    = "containerBuildDone"
+	failedContainerBuild  = "failedContainerBuild"
+	startedContainerBuild = "startedContainerBuild"
 	isoBuildDone          = "isoBuildDone"
 	failedIsoBuild        = "failedIsoBuild"
 	startedIsoBuild       = "startedIsoBuild"
@@ -121,7 +121,7 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForLongDuration}, nil
 	}
 
-	if lastBuildStatus == StartedContainerBuild {
+	if lastBuildStatus == startedContainerBuild {
 		// if the edge container already created but wasn't finish yet - check the build status
 		logger.Info("update the edge-container's compose ID job status")
 		composeStatus, err := r.updateContainerComposeStatus(ctx, logger, osBuild)
@@ -139,13 +139,13 @@ func (r *OSBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if lastBuildStatus == FailedContainerBuild {
+	if lastBuildStatus == failedContainerBuild {
 		logger.Error(fmt.Errorf("failed to build edge container"), "")
 		return ctrl.Result{}, nil
 	}
 
 	// if the build was finished successfully and the target image is edge-container then return
-	if lastBuildStatus == ContainerBuildDone && osBuild.Spec.Details.TargetImage.TargetImageType == EdgeContainerImgType {
+	if lastBuildStatus == containerBuildDone && osBuild.Spec.Details.TargetImage.TargetImageType == EdgeContainerImgType {
 		logger.Info(fmt.Sprintf("the job ID %s, Finished", osBuild.Status.ContainerComposeId))
 		return ctrl.Result{}, nil
 	}
@@ -197,7 +197,7 @@ func (r *OSBuildReconciler) updateContainerComposeStatus(ctx context.Context, lo
 	status := composeStatus.Status
 	buildUrl := r.getBuildUrl(logger, composeStatus)
 
-	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, ContainerBuildDone, FailedContainerBuild, StartedContainerBuild, buildUrl, emptyURL)
+	err = r.updateOSBuildConditionStatus(ctx, logger, osBuild, status, containerBuildDone, failedContainerBuild, startedContainerBuild, buildUrl, emptyURL)
 	if err != nil {
 		logger.Error(err, "failed to update OSBuild condition status")
 		return "", err
@@ -284,7 +284,7 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 	if err != nil {
 		logger.Error(err, "failed to post a new request")
 
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, FailedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, failedToSendPostRequestMsg, failedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
@@ -296,7 +296,7 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 		err = fmt.Errorf(errorMsg)
 		logger.Error(err, "postCompose request failed")
 
-		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, FailedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
+		errUpdating := r.updateOSBuildStatus(ctx, logger, osBuild, errorMsg, failedContainerBuild, EmptyComposeID, EmptyComposeID, emptyURL, emptyURL)
 		if errUpdating != nil {
 			logger.Error(errUpdating, "failed to update OSBuild condition status")
 		}
@@ -306,7 +306,7 @@ func (r *OSBuildReconciler) postComposeEdgeContainer(ctx context.Context, logger
 	containerComposeId := composerResponse.JSON201.Id.String()
 	logger.Info("postComposer request was sent and trigger a new compose ID ", "container compose ID: ", containerComposeId)
 
-	return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobStillRunningMsg, StartedContainerBuild, containerComposeId, EmptyComposeID, emptyURL, emptyURL)
+	return r.updateOSBuildStatus(ctx, logger, osBuild, EdgeContainerJobStillRunningMsg, startedContainerBuild, containerComposeId, EmptyComposeID, emptyURL, emptyURL)
 }
 
 func (r *OSBuildReconciler) updateOSBuildStatus(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild,
