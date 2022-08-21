@@ -11,7 +11,7 @@ require (
 	github.com/u-root/u-root v0.9.0
 	github.com/urfave/cli/v2 v2.11.2
 	k8s.io/apimachinery v0.24.4
-	k8s.io/client-go v0.24.3
+	k8s.io/client-go v0.24.4
 	sigs.k8s.io/controller-runtime v0.12.3
 )
 
