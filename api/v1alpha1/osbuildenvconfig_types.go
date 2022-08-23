@@ -173,8 +173,8 @@ type ContainerRegistryServiceConfig struct {
 
 // OSBuildEnvConfigStatus defines the observed state of OSBuildEnvConfig
 type OSBuildEnvConfigStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// The conditions present the latest available observations of osbuild environment's current state
+	Conditions []Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true

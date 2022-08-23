@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -46,6 +47,7 @@ import (
 
 	osbuildv1alpha1 "github.com/project-flotta/osbuild-operator/api/v1alpha1"
 	"github.com/project-flotta/osbuild-operator/internal/conf"
+	"github.com/project-flotta/osbuild-operator/internal/predicates"
 	"github.com/project-flotta/osbuild-operator/internal/repository/certificate"
 	"github.com/project-flotta/osbuild-operator/internal/repository/configmap"
 	"github.com/project-flotta/osbuild-operator/internal/repository/deployment"
@@ -362,6 +364,7 @@ func (r *OSBuildEnvConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 func (r *OSBuildEnvConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&osbuildv1alpha1.OSBuildEnvConfig{}).
+		Owns(&batchv1.Job{}, builder.WithPredicates(predicates.OSBuildEnvConfigJobFinished{})).
 		Complete(r)
 }
 
@@ -371,7 +374,15 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 		"UID", instance.UID,
 	)
 
-	created, err := r.addFinalizer(ctx, instance)
+	created, err := r.initConditions(ctx, instance)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, nil
+	} else if created {
+		reqLogger.Info("Conditions initialized")
+		return resultQuickRequeue, nil
+	}
+
+	created, err = r.addFinalizer(ctx, instance)
 	if err != nil {
 		return ctrl.Result{Requeue: true}, nil
 	} else if created {
@@ -405,6 +416,23 @@ func (r *OSBuildEnvConfigReconciler) Update(ctx context.Context, reqLogger logr.
 	if err != nil {
 		return ctrl.Result{Requeue: true}, nil
 	} else if created {
+		return resultQuickRequeue, nil
+	}
+
+	configured, err := r.ensureWorkersConfigured(ctx, reqLogger, instance)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, nil
+	} else if !configured {
+		reqLogger.Info("The workers setup jobs are still running")
+		return ctrl.Result{}, nil
+	}
+
+	reqLogger.Info("The worker setup jobs are done")
+	updated, err := r.updateConditions(ctx, reqLogger, instance, osbuildv1alpha1.ConditionReady)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, nil
+	} else if updated {
+		reqLogger.Info("Updated status conditions")
 		return resultQuickRequeue, nil
 	}
 
@@ -535,6 +563,37 @@ func (r *OSBuildEnvConfigReconciler) ensureWorkersExists(ctx context.Context, re
 		if err != nil {
 			return false, err
 		} else if created {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (r *OSBuildEnvConfigReconciler) ensureWorkersConfigured(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
+	for i := range instance.Spec.Workers {
+		configured, err := r.ensureWorkerConfigured(ctx, reqLogger, instance, &instance.Spec.Workers[i])
+		if err != nil {
+			return false, err
+		} else if !configured {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (r *OSBuildEnvConfigReconciler) ensureWorkerConfigured(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, worker *osbuildv1alpha1.WorkerConfig) (bool, error) {
+	job, err := r.JobRepository.Read(ctx, fmt.Sprintf(workerSetupJobNameFormat, worker.Name), conf.GlobalConf.WorkingNamespace)
+	if err != nil {
+		return false, err
+	}
+
+	if job.Status.Active > 0 {
+		return false, nil
+	}
+
+	for _, condition := range job.Status.Conditions {
+		if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
 			return true, nil
 		}
 	}
@@ -1281,4 +1340,54 @@ func (r *OSBuildEnvConfigReconciler) removeFinalizer(ctx context.Context, reqLog
 	oldInstance := instance.DeepCopy()
 	controllerutil.RemoveFinalizer(instance, osBuildOperatorFinalizer)
 	return r.OSBuildEnvConfigRepository.Patch(ctx, oldInstance, instance)
+}
+
+func (r *OSBuildEnvConfigReconciler) initConditions(ctx context.Context, instance *osbuildv1alpha1.OSBuildEnvConfig) (bool, error) {
+	if len(instance.Status.Conditions) > 0 {
+		return false, nil
+	}
+
+	oldInstance := instance.DeepCopy()
+	instance.Status.Conditions = append(
+		instance.Status.Conditions,
+		osbuildv1alpha1.Condition{
+			Type:               osbuildv1alpha1.ConditionInProgress,
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: &metav1.Time{Time: time.Now()},
+		},
+		osbuildv1alpha1.Condition{
+			Type:   osbuildv1alpha1.ConditionFailed,
+			Status: metav1.ConditionFalse,
+		},
+		osbuildv1alpha1.Condition{
+			Type:   osbuildv1alpha1.ConditionReady,
+			Status: metav1.ConditionFalse,
+		},
+	)
+	return true, r.OSBuildEnvConfigRepository.PatchStatus(ctx, oldInstance, instance)
+}
+
+func (r *OSBuildEnvConfigReconciler) updateConditions(ctx context.Context, reqLogger logr.Logger, instance *osbuildv1alpha1.OSBuildEnvConfig, conditionType osbuildv1alpha1.ConditionType) (bool, error) {
+	oldInstance := instance.DeepCopy()
+
+	updated := false
+	timeNow := &metav1.Time{Time: time.Now()}
+	for i, c := range instance.Status.Conditions {
+		if c.Type == conditionType {
+			instance.Status.Conditions[i].Status = metav1.ConditionTrue
+		} else {
+			instance.Status.Conditions[i].Status = metav1.ConditionFalse
+		}
+
+		if instance.Status.Conditions[i].Status != oldInstance.Status.Conditions[i].Status {
+			instance.Status.Conditions[i].LastTransitionTime = timeNow
+			updated = true
+		}
+	}
+
+	if !updated {
+		return false, nil
+	}
+
+	return true, r.OSBuildEnvConfigRepository.PatchStatus(ctx, oldInstance, instance)
 }
