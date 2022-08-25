@@ -22,7 +22,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/golang/mock v1.6.0
 	github.com/openshift/api v3.9.0+incompatible
-	go.uber.org/zap v1.22.0
+	go.uber.org/zap v1.23.0
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d
 	k8s.io/api v0.24.4
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
