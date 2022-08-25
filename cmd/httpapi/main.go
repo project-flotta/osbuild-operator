@@ -83,8 +83,15 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", httpOK)
 	mux.HandleFunc("/readyz", httpOK)
+
+	healthServer := &http.Server{
+		Addr:              fmt.Sprintf(":%v", httpapi.GlobalHttpAPIConf.ProbesPort),
+		Handler:           mux,
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+
 	logger.Info("Starting listening to probes services")
-	logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", httpapi.GlobalHttpAPIConf.ProbesPort), mux))
+	logger.Fatal(healthServer.ListenAndServe())
 }
 
 func getRestConfig(kubeconfigPath string) (*rest.Config, error) {
