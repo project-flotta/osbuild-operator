@@ -44,6 +44,7 @@ var (
 	uploadTypeForTargetImageType = map[osbuildv1alpha1.TargetImageType]composer.UploadTypes{
 		osbuildv1alpha1.EdgeContainerImageType: composer.UploadTypesContainer,
 		osbuildv1alpha1.EdgeInstallerImageType: composer.UploadTypesAwsS3,
+		osbuildv1alpha1.GuestImageImageType:    composer.UploadTypesAwsS3,
 	}
 )
 
@@ -244,7 +245,7 @@ func (r *OSBuildReconciler) updateOSBuildConditionStatus(ctx context.Context, lo
 
 func (r *OSBuildReconciler) postComposeNewImage(ctx context.Context, logger logr.Logger, osBuild *osbuildv1alpha1.OSBuild) (ctrl.Result, error) {
 	customizations := r.createCustomizations(osBuild.Spec.Details.Customizations)
-	imageRequest, err := r.createImageRequest(osBuild, osbuildv1alpha1.EdgeContainerImageType)
+	imageRequest, err := r.createImageRequest(osBuild, osBuild.Spec.Details.TargetImage.TargetImageType)
 	if err != nil {
 		logger.Error(err, "failed to create an image request")
 		return ctrl.Result{Requeue: true, RequeueAfter: RequeueForShortDuration}, nil

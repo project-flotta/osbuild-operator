@@ -150,6 +150,7 @@ spec:
                         enum:
                         - edge-container
                         - edge-installer
+                        - guest-image
                         type: string
                     required:
                     - architecture
