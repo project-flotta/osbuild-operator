@@ -15,7 +15,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.13.0
 )
 
-require github.com/aws/aws-sdk-go v1.44.91
+require github.com/aws/aws-sdk-go v1.44.94
 
 require (
 	github.com/deepmap/oapi-codegen v1.11.0
