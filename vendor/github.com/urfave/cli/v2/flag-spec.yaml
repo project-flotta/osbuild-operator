@@ -3,7 +3,9 @@
 # `Spec` type that maps to this file structure.
 
 flag_types:
-  bool: {}
+  bool: 
+    struct_fields:
+      - { name: Count, type: int, pointer: true }
   float64: {}
   int64:
     struct_fields:
@@ -53,7 +55,12 @@ flag_types:
       - { name: Layout, type: string }
       - { name: Timezone, type: "*time.Location" }
 
-  # TODO: enable UintSlice
-  # UintSlice: {}
-  # TODO: enable Uint64Slice once #1334 lands
-  # Uint64Slice: {}
+  UintSlice: 
+    value_pointer: true
+    skip_interfaces:
+      - fmt.Stringer
+  Uint64Slice: 
+    value_pointer: true
+    skip_interfaces:
+      - fmt.Stringer
+
