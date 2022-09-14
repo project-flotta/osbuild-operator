@@ -268,7 +268,7 @@ ARCH = $(shell go env GOARCH)
 cmctl: ## Download cmctl locally if necessary.
 ifeq ("$(wildcard $(CMCTL))","")
 	curl -sSL -o /tmp/cmctl.tar.gz https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cmctl-${OS}-${ARCH}.tar.gz
-	tar xzf /tmp/cmctl.tar.gz -C ./bin ./cmctl
+	CMCMT_FILE=`tar -ztf /tmp/cmctl.tar.gz | grep cmctl`; tar xzf /tmp/cmctl.tar.gz -C ./bin ${CMCMT_FILE}
 endif
 
 # go-install-tool will 'go install' any package $2 and install it to $1.
