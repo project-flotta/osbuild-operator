@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"flag"
+	"fmt"
 	"strings"
 )
 
@@ -46,10 +47,11 @@ func (cCtx *Context) NumFlags() int {
 
 // Set sets a context flag to a value.
 func (cCtx *Context) Set(name, value string) error {
-	if cCtx.flagSet.Lookup(name) == nil {
-		cCtx.onInvalidFlag(name)
+	if fs := cCtx.lookupFlagSet(name); fs != nil {
+		return fs.Set(name, value)
 	}
-	return cCtx.flagSet.Set(name, value)
+
+	return fmt.Errorf("no such flag -%s", name)
 }
 
 // IsSet determines if the flag was actually set
@@ -103,6 +105,16 @@ func (cCtx *Context) Lineage() []*Context {
 	}
 
 	return lineage
+}
+
+// Count returns the num of occurences of this flag
+func (cCtx *Context) Count(name string) int {
+	if fs := cCtx.lookupFlagSet(name); fs != nil {
+		if cf, ok := fs.Lookup(name).Value.(Countable); ok {
+			return cf.Count()
+		}
+	}
+	return 0
 }
 
 // Value returns the value of the flag corresponding to `name`

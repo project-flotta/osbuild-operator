@@ -83,6 +83,12 @@ func (f FlagsByName) Swap(i, j int) {
 	f[i], f[j] = f[j], f[i]
 }
 
+// ActionableFlag is an interface that wraps Flag interface and RunAction operation.
+type ActionableFlag interface {
+	Flag
+	RunAction(*Context) error
+}
+
 // Flag is a common interface related to parsing flags in cli.
 // For more advanced flag parsing techniques, it is recommended that
 // this interface be implemented.
@@ -137,6 +143,12 @@ type CategorizableFlag interface {
 	VisibleFlag
 
 	GetCategory() string
+}
+
+// Countable is an interface to enable detection of flag values which support
+// repetitive flags
+type Countable interface {
+	Count() int
 }
 
 func flagSet(name string, flags []Flag) (*flag.FlagSet, error) {
