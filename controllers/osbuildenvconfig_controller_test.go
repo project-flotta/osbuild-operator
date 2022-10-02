@@ -329,11 +329,28 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 	})
 
 	Context("Handle update", func() {
+		var (
+			conditionsInProgress = []osbuildv1alpha1.Condition{
+				{
+					Type:   osbuildv1alpha1.ConditionInProgress,
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:   osbuildv1alpha1.ConditionFailed,
+					Status: metav1.ConditionFalse,
+				},
+				{
+					Type:   osbuildv1alpha1.ConditionReady,
+					Status: metav1.ConditionFalse,
+				},
+			}
+		)
+
 		BeforeEach(func() {
 			osBuildEnvConfigRepository.EXPECT().Read(requestContext, instanceName).Return(&instance, nil)
 		})
 
-		Context("Adding Finalizers", func() {
+		Context("Initializing the conditions", func() {
 			var (
 				originalInstance *osbuildv1alpha1.OSBuildEnvConfig
 			)
@@ -342,9 +359,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 				originalInstance = instance.DeepCopy()
 			})
 
-			It("Should requeue if it failed to add the finalizer", func() {
+			It("Should return requeue if it failed to initialize the conditions array", func() {
 				// given
-				osBuildEnvConfigRepository.EXPECT().Patch(requestContext, originalInstance, &instance).Return(errFailed)
+				osBuildEnvConfigRepository.EXPECT().PatchStatus(requestContext, originalInstance, &instance).Return(errFailed)
 				// when
 				result, err := reconciler.Reconcile(requestContext, request)
 				// then
@@ -352,69 +369,35 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 				Expect(result).To(Equal(resultRequeue))
 			})
 
-			It("Should return requeue if the finalizer was added", func() {
+			It("Should return requeue if the conditions array was initialized", func() {
 				// given
-				osBuildEnvConfigRepository.EXPECT().Patch(requestContext, originalInstance, &instance).Return(nil)
+				osBuildEnvConfigRepository.EXPECT().PatchStatus(requestContext, originalInstance, &instance).Return(nil)
 				// when
 				result, err := reconciler.Reconcile(requestContext, request)
 				// then
 				Expect(err).To(BeNil())
 				Expect(result).To(Equal(resultQuickRequeue))
+				validateOSBuildEnvConfigConditionArr(instance.Status.Conditions, osbuildv1alpha1.ConditionInProgress)
 			})
 		})
 
-		Context("With finalizer", func() {
-			const (
-				composerWorkerAPIRouteName   = "osbuild-worker"
-				composerWorkerAPIServiceName = "osbuild-worker"
-				composerWorkerAPIRouteHost   = "osbuild-worker.apps.my-cluster.example.com"
-			)
-
-			var (
-				composerWorkerAPIRoute routev1.Route
-			)
-
+		Context("Conditions array initialized", func() {
 			BeforeEach(func() {
-				instance.ObjectMeta.Finalizers = []string{osBuildOperatorFinalizer}
-
-				composerWorkerAPIRoute = routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            composerWorkerAPIRouteName,
-						Namespace:       conf.GlobalConf.WorkingNamespace,
-						OwnerReferences: []metav1.OwnerReference{ownerReference},
-					},
-					Spec: routev1.RouteSpec{
-						To: routev1.RouteTargetReference{
-							Kind: "Service",
-							Name: composerWorkerAPIServiceName,
-						},
-						TLS: &routev1.TLSConfig{
-							Termination: routev1.TLSTerminationPassthrough,
-						},
-					},
-				}
-
+				instance.Status.Conditions = append([]osbuildv1alpha1.Condition{}, conditionsInProgress...)
 			})
 
-			It("Should requeue if failed to get the Route for the Composer Worker API ", func() {
-				// given
-				routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errFailed)
-				// when
-				result, err := reconciler.Reconcile(requestContext, request)
-				// then
-				Expect(err).To(BeNil())
-				Expect(result).To(Equal(resultRequeue))
-			})
-
-			Context("Route for the Composer Worker API not found", func() {
+			Context("Adding Finalizers", func() {
+				var (
+					originalInstance *osbuildv1alpha1.OSBuildEnvConfig
+				)
 
 				BeforeEach(func() {
-					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errNotFound)
+					originalInstance = instance.DeepCopy()
 				})
 
-				It("Should requeue if failed to create the Route for the Composer Worker API", func() {
+				It("Should requeue if it failed to add the finalizer", func() {
 					// given
-					routeRepository.EXPECT().Create(requestContext, &composerWorkerAPIRoute).Return(errFailed)
+					osBuildEnvConfigRepository.EXPECT().Patch(requestContext, originalInstance, &instance).Return(errFailed)
 					// when
 					result, err := reconciler.Reconcile(requestContext, request)
 					// then
@@ -422,9 +405,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 					Expect(result).To(Equal(resultRequeue))
 				})
 
-				It("Should return requeue if succeeded to create the Route for the Composer Worker API", func() {
+				It("Should return requeue if the finalizer was added", func() {
 					// given
-					routeRepository.EXPECT().Create(requestContext, &composerWorkerAPIRoute).Return(nil)
+					osBuildEnvConfigRepository.EXPECT().Patch(requestContext, originalInstance, &instance).Return(nil)
 					// when
 					result, err := reconciler.Reconcile(requestContext, request)
 					// then
@@ -433,92 +416,58 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 				})
 			})
 
-			Context("Route for the Composer Worker API exists ", func() {
+			Context("With finalizer", func() {
+				const (
+					composerWorkerAPIRouteName   = "osbuild-worker"
+					composerWorkerAPIServiceName = "osbuild-worker"
+					composerWorkerAPIRouteHost   = "osbuild-worker.apps.my-cluster.example.com"
+				)
+
+				var (
+					composerWorkerAPIRoute routev1.Route
+				)
+
 				BeforeEach(func() {
-					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
-					composerWorkerAPIRoute.Status.Ingress = []routev1.RouteIngress{
-						{
-							Conditions: []routev1.RouteIngressCondition{
-								{
-									Type: routev1.RouteAdmitted,
-								},
+					instance.ObjectMeta.Finalizers = []string{osBuildOperatorFinalizer}
+
+					composerWorkerAPIRoute = routev1.Route{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:            composerWorkerAPIRouteName,
+							Namespace:       conf.GlobalConf.WorkingNamespace,
+							OwnerReferences: []metav1.OwnerReference{ownerReference},
+						},
+						Spec: routev1.RouteSpec{
+							To: routev1.RouteTargetReference{
+								Kind: "Service",
+								Name: composerWorkerAPIServiceName,
+							},
+							TLS: &routev1.TLSConfig{
+								Termination: routev1.TLSTerminationPassthrough,
 							},
 						},
 					}
+
 				})
 
-				It("Should requeue if failed to check if the Route for the Composer Worker API is ready", func() {
-					//given
+				It("Should requeue if failed to get the Route for the Composer Worker API ", func() {
+					// given
 					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errFailed)
 					// when
 					result, err := reconciler.Reconcile(requestContext, request)
 					// then
 					Expect(err).To(BeNil())
 					Expect(result).To(Equal(resultRequeue))
-
 				})
 
-				It("Should return requeue if the Route for the Composer Worker API is not ready", func() {
-					// given
-					composerWorkerAPIRoute.Status.Ingress[0].Conditions[0].Status = corev1.ConditionFalse
-					routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
-					// when
-					result, err := reconciler.Reconcile(requestContext, request)
-					// then
-					Expect(err).To(BeNil())
-					Expect(result).To(Equal(reconcile.Result{Requeue: true, RequeueAfter: time.Second * 10}))
-				})
-
-				Context("Worker API Route is ready", func() {
-					const (
-						certificateDuration            = 87600
-						composerComposerAPIServiceName = "osbuild-composer"
-					)
-					var (
-						composerCertificate certmanagerv1.Certificate
-					)
+				Context("Route for the Composer Worker API not found", func() {
 
 					BeforeEach(func() {
-						composerWorkerAPIRoute.Status.Ingress[0].Conditions[0].Status = corev1.ConditionTrue
-						composerWorkerAPIRoute.Status.Ingress[0].Host = composerWorkerAPIRouteHost
-						routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
-
-						composerCertificate = certmanagerv1.Certificate{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:            composerCertificateName,
-								Namespace:       operatorNamespace,
-								OwnerReferences: []metav1.OwnerReference{ownerReference},
-							},
-							Spec: certmanagerv1.CertificateSpec{
-								SecretName: composerCertificateName,
-								PrivateKey: &certmanagerv1.CertificatePrivateKey{
-									Algorithm: "ECDSA",
-									Size:      256,
-								},
-								DNSNames: []string{
-									composerComposerAPIServiceName,
-									composerWorkerAPIServiceName,
-									composerWorkerAPIRouteHost,
-								},
-								Duration: &metav1.Duration{
-									Duration: time.Hour * certificateDuration,
-								},
-								IssuerRef: certmanagermetav1.ObjectReference{
-									Group: "cert-manager.io",
-									Kind:  "Issuer",
-									Name:  caIssuerName,
-								},
-							},
-						}
+						routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errNotFound)
 					})
 
-					AfterEach(func() {
-						instance.ObjectMeta.Finalizers = nil
-					})
-
-					It("Should requeue if it failed to get the certificate", func() {
+					It("Should requeue if failed to create the Route for the Composer Worker API", func() {
 						// given
-						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
+						routeRepository.EXPECT().Create(requestContext, &composerWorkerAPIRoute).Return(errFailed)
 						// when
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
@@ -526,47 +475,103 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 						Expect(result).To(Equal(resultRequeue))
 					})
 
-					It("Should requeue if failed to create the certificate", func() {
+					It("Should return requeue if succeeded to create the Route for the Composer Worker API", func() {
 						// given
-						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
-						certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(errFailed)
-						// when
-						result, err := reconciler.Reconcile(requestContext, request)
-						// then
-						Expect(err).To(BeNil())
-						Expect(result).To(Equal(resultRequeue))
-					})
-
-					It("Should return requeue if the certificate was created", func() {
-						// given
-						certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
-						certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(nil)
+						routeRepository.EXPECT().Create(requestContext, &composerWorkerAPIRoute).Return(nil)
 						// when
 						result, err := reconciler.Reconcile(requestContext, request)
 						// then
 						Expect(err).To(BeNil())
 						Expect(result).To(Equal(resultQuickRequeue))
 					})
+				})
 
-					Context("Composer Certificate is already created", func() {
+				Context("Route for the Composer Worker API exists ", func() {
+					BeforeEach(func() {
+						routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
+						composerWorkerAPIRoute.Status.Ingress = []routev1.RouteIngress{
+							{
+								Conditions: []routev1.RouteIngressCondition{
+									{
+										Type: routev1.RouteAdmitted,
+									},
+								},
+							},
+						}
+					})
+
+					It("Should requeue if failed to check if the Route for the Composer Worker API is ready", func() {
+						//given
+						routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(nil, errFailed)
+						// when
+						result, err := reconciler.Reconcile(requestContext, request)
+						// then
+						Expect(err).To(BeNil())
+						Expect(result).To(Equal(resultRequeue))
+
+					})
+
+					It("Should return requeue if the Route for the Composer Worker API is not ready", func() {
+						// given
+						composerWorkerAPIRoute.Status.Ingress[0].Conditions[0].Status = corev1.ConditionFalse
+						routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
+						// when
+						result, err := reconciler.Reconcile(requestContext, request)
+						// then
+						Expect(err).To(BeNil())
+						Expect(result).To(Equal(reconcile.Result{Requeue: true, RequeueAfter: time.Second * 10}))
+					})
+
+					Context("Worker API Route is ready", func() {
+						const (
+							certificateDuration            = 87600
+							composerComposerAPIServiceName = "osbuild-composer"
+						)
 						var (
-							composerCertificateSecret corev1.Secret
+							composerCertificate certmanagerv1.Certificate
 						)
 
 						BeforeEach(func() {
-							certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificate, nil)
+							composerWorkerAPIRoute.Status.Ingress[0].Conditions[0].Status = corev1.ConditionTrue
+							composerWorkerAPIRoute.Status.Ingress[0].Host = composerWorkerAPIRouteHost
+							routeRepository.EXPECT().Read(requestContext, composerWorkerAPIRouteName, operatorNamespace).Return(&composerWorkerAPIRoute, nil)
 
-							composerCertificateSecret = corev1.Secret{
+							composerCertificate = certmanagerv1.Certificate{
 								ObjectMeta: metav1.ObjectMeta{
-									Namespace: operatorNamespace,
-									Name:      composerCertificateName,
+									Name:            composerCertificateName,
+									Namespace:       operatorNamespace,
+									OwnerReferences: []metav1.OwnerReference{ownerReference},
+								},
+								Spec: certmanagerv1.CertificateSpec{
+									SecretName: composerCertificateName,
+									PrivateKey: &certmanagerv1.CertificatePrivateKey{
+										Algorithm: "ECDSA",
+										Size:      256,
+									},
+									DNSNames: []string{
+										composerComposerAPIServiceName,
+										composerWorkerAPIServiceName,
+										composerWorkerAPIRouteHost,
+									},
+									Duration: &metav1.Duration{
+										Duration: time.Hour * certificateDuration,
+									},
+									IssuerRef: certmanagermetav1.ObjectReference{
+										Group: "cert-manager.io",
+										Kind:  "Issuer",
+										Name:  caIssuerName,
+									},
 								},
 							}
 						})
 
-						It("Should requeue if it failed to get the composer certificate secret", func() {
+						AfterEach(func() {
+							instance.ObjectMeta.Finalizers = nil
+						})
+
+						It("Should requeue if it failed to get the certificate", func() {
 							// given
-							secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
+							certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
 							// when
 							result, err := reconciler.Reconcile(requestContext, request)
 							// then
@@ -574,23 +579,47 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 							Expect(result).To(Equal(resultRequeue))
 						})
 
-						Context("Successfully get the composer certificate secret", func() {
+						It("Should requeue if failed to create the certificate", func() {
+							// given
+							certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
+							certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(errFailed)
+							// when
+							result, err := reconciler.Reconcile(requestContext, request)
+							// then
+							Expect(err).To(BeNil())
+							Expect(result).To(Equal(resultRequeue))
+						})
+
+						It("Should return requeue if the certificate was created", func() {
+							// given
+							certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errNotFound)
+							certificateRepository.EXPECT().Create(requestContext, &composerCertificate).Return(nil)
+							// when
+							result, err := reconciler.Reconcile(requestContext, request)
+							// then
+							Expect(err).To(BeNil())
+							Expect(result).To(Equal(resultQuickRequeue))
+						})
+
+						Context("Composer Certificate is already created", func() {
 							var (
-								originalComposerCertificateSecret *corev1.Secret
-								updatedComposerCertificateSecret  *corev1.Secret
+								composerCertificateSecret corev1.Secret
 							)
 
 							BeforeEach(func() {
-								secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificateSecret, nil)
+								certificateRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificate, nil)
 
-								originalComposerCertificateSecret = composerCertificateSecret.DeepCopy()
-								updatedComposerCertificateSecret = composerCertificateSecret.DeepCopy()
-								updatedComposerCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
+								composerCertificateSecret = corev1.Secret{
+									ObjectMeta: metav1.ObjectMeta{
+										Namespace: operatorNamespace,
+										Name:      composerCertificateName,
+									},
+								}
 							})
 
-							It("Should requeue if failed to update the secret owner", func() {
+							It("Should requeue if it failed to get the composer certificate secret", func() {
 								// given
-								secretRepository.EXPECT().Patch(requestContext, originalComposerCertificateSecret, updatedComposerCertificateSecret).Return(errFailed)
+								secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(nil, errFailed)
 								// when
 								result, err := reconciler.Reconcile(requestContext, request)
 								// then
@@ -598,50 +627,23 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 								Expect(result).To(Equal(resultRequeue))
 							})
 
-							It("Should return requeue if succeeded to update the secret owner", func() {
-								// given
-								secretRepository.EXPECT().Patch(requestContext, originalComposerCertificateSecret, updatedComposerCertificateSecret).Return(nil)
-								// when
-								result, err := reconciler.Reconcile(requestContext, request)
-								// then
-								Expect(err).To(BeNil())
-								Expect(result).To(Equal(resultQuickRequeue))
-							})
-						})
-
-						Context("Composer Certificate Owner is already set", func() {
-							BeforeEach(func() {
-								composerCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
-								secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificateSecret, nil)
-							})
-
-							It("Should requeue if PSQL information is not set", func() {
-								// when
-								result, err := reconciler.Reconcile(requestContext, request)
-								// then
-								Expect(err).To(BeNil())
-								Expect(result).To(Equal(resultRequeue))
-
-							})
-
-							Context("PSQL information is set", func() {
-								const (
-									composerConfigMapName = "osbuild-composer-config"
+							Context("Successfully get the composer certificate secret", func() {
+								var (
+									originalComposerCertificateSecret *corev1.Secret
+									updatedComposerCertificateSecret  *corev1.Secret
 								)
+
 								BeforeEach(func() {
-									var sslMode osbuildv1alpha1.DBSSLMode = "disable"
+									secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificateSecret, nil)
 
-									instance.Spec.Composer.PSQL = &osbuildv1alpha1.ComposerDBConfig{
-										ConnectionSecretReference: buildv1.SecretLocalReference{
-											Name: dbSecretName,
-										},
-										SSLMode: &sslMode,
-									}
+									originalComposerCertificateSecret = composerCertificateSecret.DeepCopy()
+									updatedComposerCertificateSecret = composerCertificateSecret.DeepCopy()
+									updatedComposerCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
 								})
 
-								It("Should requeue if failed to get the ConfigMap for the osbuild-composer configuration", func() {
+								It("Should requeue if failed to update the secret owner", func() {
 									// given
-									configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errFailed)
+									secretRepository.EXPECT().Patch(requestContext, originalComposerCertificateSecret, updatedComposerCertificateSecret).Return(errFailed)
 									// when
 									result, err := reconciler.Reconcile(requestContext, request)
 									// then
@@ -649,48 +651,50 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 									Expect(result).To(Equal(resultRequeue))
 								})
 
-								It("Should requeue if failed to create the ConfigMap for the osbuild-composer configuration", func() {
+								It("Should return requeue if succeeded to update the secret owner", func() {
 									// given
-									configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
-									configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
-									// when
-									result, err := reconciler.Reconcile(requestContext, request)
-									// then
-									Expect(err).To(BeNil())
-									Expect(result).To(Equal(resultRequeue))
-								})
-
-								It("Should return requeue if the ConfigMap for the osbuild-composer configuration was created", func() {
-									// given
-									configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
-									configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+									secretRepository.EXPECT().Patch(requestContext, originalComposerCertificateSecret, updatedComposerCertificateSecret).Return(nil)
 									// when
 									result, err := reconciler.Reconcile(requestContext, request)
 									// then
 									Expect(err).To(BeNil())
 									Expect(result).To(Equal(resultQuickRequeue))
 								})
+							})
 
-								Context("ConfigMap for the Composer configuration exists", func() {
+							Context("Composer Certificate Owner is already set", func() {
+								BeforeEach(func() {
+									composerCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
+									secretRepository.EXPECT().Read(requestContext, composerCertificateName, operatorNamespace).Return(&composerCertificateSecret, nil)
+								})
+
+								It("Should requeue if PSQL information is not set", func() {
+									// when
+									result, err := reconciler.Reconcile(requestContext, request)
+									// then
+									Expect(err).To(BeNil())
+									Expect(result).To(Equal(resultRequeue))
+
+								})
+
+								Context("PSQL information is set", func() {
 									const (
-										composerProxyConfigMapName = "osbuild-composer-proxy-config"
+										composerConfigMapName = "osbuild-composer-config"
 									)
-									var (
-										composerConfigConfigMap = corev1.ConfigMap{
-											ObjectMeta: metav1.ObjectMeta{
-												Namespace: operatorNamespace,
-												Name:      composerConfigMapName,
-											},
-										}
-									)
-
 									BeforeEach(func() {
-										configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(&composerConfigConfigMap, nil)
+										var sslMode osbuildv1alpha1.DBSSLMode = "disable"
+
+										instance.Spec.Composer.PSQL = &osbuildv1alpha1.ComposerDBConfig{
+											ConnectionSecretReference: buildv1.SecretLocalReference{
+												Name: dbSecretName,
+											},
+											SSLMode: &sslMode,
+										}
 									})
 
-									It("Should requeue if failed to get the ConfigMap for the proxy configuration", func() {
+									It("Should requeue if failed to get the ConfigMap for the osbuild-composer configuration", func() {
 										// given
-										configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errFailed)
+										configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errFailed)
 										// when
 										result, err := reconciler.Reconcile(requestContext, request)
 										// then
@@ -698,9 +702,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										Expect(result).To(Equal(resultRequeue))
 									})
 
-									It("Should requeue if failed to create the ConfigMap for the proxy configuration", func() {
+									It("Should requeue if failed to create the ConfigMap for the osbuild-composer configuration", func() {
 										// given
-										configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
+										configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
 										configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 										// when
 										result, err := reconciler.Reconcile(requestContext, request)
@@ -709,9 +713,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										Expect(result).To(Equal(resultRequeue))
 									})
 
-									It("Should return requeue if the ConfigMap for the proxy configuration was created", func() {
+									It("Should return requeue if the ConfigMap for the osbuild-composer configuration was created", func() {
 										// given
-										configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
+										configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(nil, errNotFound)
 										configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 										// when
 										result, err := reconciler.Reconcile(requestContext, request)
@@ -720,26 +724,26 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 										Expect(result).To(Equal(resultQuickRequeue))
 									})
 
-									Context("ConfigMap for the Proxy configuration exists", func() {
+									Context("ConfigMap for the Composer configuration exists", func() {
 										const (
-											composerDeploymentName = "composer"
+											composerProxyConfigMapName = "osbuild-composer-proxy-config"
 										)
 										var (
-											proxyConfigConfigMap = corev1.ConfigMap{
+											composerConfigConfigMap = corev1.ConfigMap{
 												ObjectMeta: metav1.ObjectMeta{
 													Namespace: operatorNamespace,
-													Name:      composerProxyConfigMapName,
+													Name:      composerConfigMapName,
 												},
 											}
 										)
 
 										BeforeEach(func() {
-											configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(&proxyConfigConfigMap, nil)
+											configMapRepository.EXPECT().Read(requestContext, composerConfigMapName, operatorNamespace).Return(&composerConfigConfigMap, nil)
 										})
 
-										It("Should requeue if failed to get the composer deployment", func() {
+										It("Should requeue if failed to get the ConfigMap for the proxy configuration", func() {
 											// given
-											deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errFailed)
+											configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errFailed)
 											// when
 											result, err := reconciler.Reconcile(requestContext, request)
 											// then
@@ -747,78 +751,48 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 											Expect(result).To(Equal(resultRequeue))
 										})
 
-										Context("Composer deployment not found", func() {
-											BeforeEach(func() {
-												deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errNotFound)
-											})
-
-											It("Should requeue if failed to create the composer deployment", func() {
-												// given
-												deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
-												// when
-												result, err := reconciler.Reconcile(requestContext, request)
-												// then
-												Expect(err).To(BeNil())
-												Expect(result).To(Equal(resultRequeue))
-											})
-
-											It("Should return requeue if the composer deployment was created", func() {
-												// given
-												deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
-												// when
-												result, err := reconciler.Reconcile(requestContext, request)
-												// then
-												Expect(err).To(BeNil())
-												Expect(result).To(Equal(resultQuickRequeue))
-											})
+										It("Should requeue if failed to create the ConfigMap for the proxy configuration", func() {
+											// given
+											configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
+											configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+											// when
+											result, err := reconciler.Reconcile(requestContext, request)
+											// then
+											Expect(err).To(BeNil())
+											Expect(result).To(Equal(resultRequeue))
 										})
 
-										Context("Composer Deployment exists", func() {
+										It("Should return requeue if the ConfigMap for the proxy configuration was created", func() {
+											// given
+											configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(nil, errNotFound)
+											configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+											// when
+											result, err := reconciler.Reconcile(requestContext, request)
+											// then
+											Expect(err).To(BeNil())
+											Expect(result).To(Equal(resultQuickRequeue))
+										})
+
+										Context("ConfigMap for the Proxy configuration exists", func() {
 											const (
-												composerComposerAPIPortName = "composer-api"
+												composerDeploymentName = "composer"
 											)
 											var (
-												composerDeployment = appsv1.Deployment{
+												proxyConfigConfigMap = corev1.ConfigMap{
 													ObjectMeta: metav1.ObjectMeta{
 														Namespace: operatorNamespace,
-														Name:      composerDeploymentName,
+														Name:      composerProxyConfigMapName,
 													},
 												}
-
-												composerAPIExternalPort = intstr.FromInt(8080)
-
-												composerComposerAPIService corev1.Service
 											)
 
 											BeforeEach(func() {
-												deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(&composerDeployment, nil)
-
-												composerComposerAPIService = corev1.Service{
-													ObjectMeta: metav1.ObjectMeta{
-														Namespace:       operatorNamespace,
-														Name:            composerComposerAPIServiceName,
-														OwnerReferences: []metav1.OwnerReference{ownerReference},
-													},
-													Spec: corev1.ServiceSpec{
-														Type: corev1.ServiceTypeClusterIP,
-														Ports: []corev1.ServicePort{
-															{
-																Name:       composerComposerAPIPortName,
-																Port:       443,
-																Protocol:   "TCP",
-																TargetPort: composerAPIExternalPort,
-															},
-														},
-														Selector: map[string]string{
-															"app": "osbuild-composer",
-														},
-													},
-												}
+												configMapRepository.EXPECT().Read(requestContext, composerProxyConfigMapName, operatorNamespace).Return(&proxyConfigConfigMap, nil)
 											})
 
-											It("Should requeue if failed to get the composer api service", func() {
+											It("Should requeue if failed to get the composer deployment", func() {
 												// given
-												serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errFailed)
+												deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errFailed)
 												// when
 												result, err := reconciler.Reconcile(requestContext, request)
 												// then
@@ -826,14 +800,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												Expect(result).To(Equal(resultRequeue))
 											})
 
-											Context("Composer API Service not found", func() {
+											Context("Composer deployment not found", func() {
 												BeforeEach(func() {
-													serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
+													deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(nil, errNotFound)
 												})
 
-												It("Should requeue if failed to create the composer api service", func() {
+												It("Should requeue if failed to create the composer deployment", func() {
 													// given
-													serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(errFailed)
+													deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
@@ -841,9 +815,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													Expect(result).To(Equal(resultRequeue))
 												})
 
-												It("Should return requeue if the composer api service was created", func() {
+												It("Should return requeue if the composer deployment was created", func() {
 													// given
-													serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(nil)
+													deploymentRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
@@ -852,34 +826,40 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 												})
 											})
 
-											Context("Composer API Service exists", func() {
+											Context("Composer Deployment exists", func() {
 												const (
 													composerComposerAPIPortName = "composer-api"
-													composerWorkerAPIPortName   = "worker-api"
 												)
-
 												var (
-													composerWorkerAPIService corev1.Service
+													composerDeployment = appsv1.Deployment{
+														ObjectMeta: metav1.ObjectMeta{
+															Namespace: operatorNamespace,
+															Name:      composerDeploymentName,
+														},
+													}
 
-													workerAPIExternalPort = intstr.FromInt(8700)
+													composerAPIExternalPort = intstr.FromInt(8080)
+
+													composerComposerAPIService corev1.Service
 												)
-												BeforeEach(func() {
-													serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(&composerComposerAPIService, nil)
 
-													composerWorkerAPIService = corev1.Service{
+												BeforeEach(func() {
+													deploymentRepository.EXPECT().Read(requestContext, composerDeploymentName, operatorNamespace).Return(&composerDeployment, nil)
+
+													composerComposerAPIService = corev1.Service{
 														ObjectMeta: metav1.ObjectMeta{
 															Namespace:       operatorNamespace,
-															Name:            composerWorkerAPIServiceName,
+															Name:            composerComposerAPIServiceName,
 															OwnerReferences: []metav1.OwnerReference{ownerReference},
 														},
 														Spec: corev1.ServiceSpec{
 															Type: corev1.ServiceTypeClusterIP,
 															Ports: []corev1.ServicePort{
 																{
-																	Name:       composerWorkerAPIPortName,
+																	Name:       composerComposerAPIPortName,
 																	Port:       443,
 																	Protocol:   "TCP",
-																	TargetPort: workerAPIExternalPort,
+																	TargetPort: composerAPIExternalPort,
 																},
 															},
 															Selector: map[string]string{
@@ -889,9 +869,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													}
 												})
 
-												It("Should requeue if failed to get the worker api service", func() {
+												It("Should requeue if failed to get the composer api service", func() {
 													// given
-													serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errFailed)
+													serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errFailed)
 													// when
 													result, err := reconciler.Reconcile(requestContext, request)
 													// then
@@ -899,14 +879,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													Expect(result).To(Equal(resultRequeue))
 												})
 
-												Context("Worker API Service not found", func() {
+												Context("Composer API Service not found", func() {
 													BeforeEach(func() {
-														serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
+														serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
 													})
 
-													It("Should requeue if failed to create the worker api service", func() {
+													It("Should requeue if failed to create the composer api service", func() {
 														// given
-														serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(errFailed)
+														serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(errFailed)
 														// when
 														result, err := reconciler.Reconcile(requestContext, request)
 														// then
@@ -914,9 +894,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 														Expect(result).To(Equal(resultRequeue))
 													})
 
-													It("Should return requeue if the worker api service was created", func() {
+													It("Should return requeue if the composer api service was created", func() {
 														// given
-														serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(nil)
+														serviceRepository.EXPECT().Create(requestContext, &composerComposerAPIService).Return(nil)
 														// when
 														result, err := reconciler.Reconcile(requestContext, request)
 														// then
@@ -925,18 +905,46 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 													})
 												})
 
-												Context("Worker API Service exists", func() {
+												Context("Composer API Service exists", func() {
 													const (
-														workerConfigAnsibleConfigConfigMapName = "osbuild-worker-setup-ansible-config"
+														composerComposerAPIPortName = "composer-api"
+														composerWorkerAPIPortName   = "worker-api"
 													)
 
+													var (
+														composerWorkerAPIService corev1.Service
+
+														workerAPIExternalPort = intstr.FromInt(8700)
+													)
 													BeforeEach(func() {
-														serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(&composerWorkerAPIService, nil)
+														serviceRepository.EXPECT().Read(requestContext, composerComposerAPIServiceName, operatorNamespace).Return(&composerComposerAPIService, nil)
+
+														composerWorkerAPIService = corev1.Service{
+															ObjectMeta: metav1.ObjectMeta{
+																Namespace:       operatorNamespace,
+																Name:            composerWorkerAPIServiceName,
+																OwnerReferences: []metav1.OwnerReference{ownerReference},
+															},
+															Spec: corev1.ServiceSpec{
+																Type: corev1.ServiceTypeClusterIP,
+																Ports: []corev1.ServicePort{
+																	{
+																		Name:       composerWorkerAPIPortName,
+																		Port:       443,
+																		Protocol:   "TCP",
+																		TargetPort: workerAPIExternalPort,
+																	},
+																},
+																Selector: map[string]string{
+																	"app": "osbuild-composer",
+																},
+															},
+														}
 													})
 
-													It("Should requeue if failed to get the configMap for the ansible config ", func() {
+													It("Should requeue if failed to get the worker api service", func() {
 														// given
-														configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
+														serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errFailed)
 														// when
 														result, err := reconciler.Reconcile(requestContext, request)
 														// then
@@ -944,14 +952,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 														Expect(result).To(Equal(resultRequeue))
 													})
 
-													Context("ConfigMap for configuration ansible config not found", func() {
+													Context("Worker API Service not found", func() {
 														BeforeEach(func() {
-															configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
+															serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(nil, errNotFound)
 														})
 
-														It("Should requeue if failed to create the configMap for the ansible config for the worker configuration job", func() {
+														It("Should requeue if failed to create the worker api service", func() {
 															// given
-															configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+															serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(errFailed)
 															// when
 															result, err := reconciler.Reconcile(requestContext, request)
 															// then
@@ -959,9 +967,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 															Expect(result).To(Equal(resultRequeue))
 														})
 
-														It("Should return requeue if succeeded to create the configMap for the ansible config for the worker configuration job", func() {
+														It("Should return requeue if the worker api service was created", func() {
 															// given
-															configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+															serviceRepository.EXPECT().Create(requestContext, &composerWorkerAPIService).Return(nil)
 															// when
 															result, err := reconciler.Reconcile(requestContext, request)
 															// then
@@ -970,27 +978,18 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 														})
 													})
 
-													Context("ConfigMap for the ansible config exists", func() {
+													Context("Worker API Service exists", func() {
 														const (
-															workerOSBuildWorkerConfigConfigMapName = "osbuild-worker-config"
-														)
-
-														var (
-															workerConfigAnsibleConfigConfigMap = corev1.ConfigMap{
-																ObjectMeta: metav1.ObjectMeta{
-																	Namespace: operatorNamespace,
-																	Name:      workerConfigAnsibleConfigConfigMapName,
-																},
-															}
+															workerConfigAnsibleConfigConfigMapName = "osbuild-worker-setup-ansible-config"
 														)
 
 														BeforeEach(func() {
-															configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(&workerConfigAnsibleConfigConfigMap, nil)
+															serviceRepository.EXPECT().Read(requestContext, composerWorkerAPIServiceName, operatorNamespace).Return(&composerWorkerAPIService, nil)
 														})
 
-														It("Should requeue if failed to get the configMap for the osbuild-worker config", func() {
+														It("Should requeue if failed to get the configMap for the ansible config ", func() {
 															// given
-															configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
+															configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
 															// when
 															result, err := reconciler.Reconcile(requestContext, request)
 															// then
@@ -998,12 +997,12 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 															Expect(result).To(Equal(resultRequeue))
 														})
 
-														Context("ConfigMap for osbuild-worker config not found", func() {
+														Context("ConfigMap for configuration ansible config not found", func() {
 															BeforeEach(func() {
-																configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
+																configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
 															})
 
-															It("Should requeue if failed to create the configMap for the osbuild-worker config", func() {
+															It("Should requeue if failed to create the configMap for the ansible config for the worker configuration job", func() {
 																// given
 																configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																// when
@@ -1013,7 +1012,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																Expect(result).To(Equal(resultRequeue))
 															})
 
-															It("Should return requeue if succeeded to create the configMap for the osbuild-worker config", func() {
+															It("Should return requeue if succeeded to create the configMap for the ansible config for the worker configuration job", func() {
 																// given
 																configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 																// when
@@ -1024,46 +1023,27 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 															})
 														})
 
-														Context("ConfigMap for the osbuild-worker config exists", func() {
+														Context("ConfigMap for the ansible config exists", func() {
 															const (
-																workerSSHKeysSecretName    = "osbuild-worker-ssh" // #nosec G101
-																workerSSHKeysPrivateKeyKey = "ssh-privatekey"
-																workerSSHKeysPublicKeyKey  = "ssh-publickey"
+																workerOSBuildWorkerConfigConfigMapName = "osbuild-worker-config"
 															)
 
 															var (
-																workerOSBuildWorkerConfigConfigMap = corev1.ConfigMap{
+																workerConfigAnsibleConfigConfigMap = corev1.ConfigMap{
 																	ObjectMeta: metav1.ObjectMeta{
 																		Namespace: operatorNamespace,
-																		Name:      workerOSBuildWorkerConfigConfigMapName,
+																		Name:      workerConfigAnsibleConfigConfigMapName,
 																	},
 																}
-
-																sshPrivateKey = []byte("sshPrivateKey")
-																sshPublicKey  = []byte("sshPublicKey")
-
-																workerSSHKeysSecret *corev1.Secret
 															)
 
 															BeforeEach(func() {
-																configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(&workerOSBuildWorkerConfigConfigMap, nil)
-																workerSSHKeysSecret = &corev1.Secret{
-																	ObjectMeta: metav1.ObjectMeta{
-																		Name:            workerSSHKeysSecretName,
-																		Namespace:       operatorNamespace,
-																		OwnerReferences: []metav1.OwnerReference{ownerReference},
-																	},
-																	Immutable: pointer.Bool(true),
-																	StringData: map[string]string{
-																		workerSSHKeysPrivateKeyKey: string(sshPrivateKey),
-																		workerSSHKeysPublicKeyKey:  string(sshPublicKey),
-																	},
-																}
+																configMapRepository.EXPECT().Read(requestContext, workerConfigAnsibleConfigConfigMapName, operatorNamespace).Return(&workerConfigAnsibleConfigConfigMap, nil)
 															})
 
-															It("Should requeue if failed to get the secret for the osbuild-worker ssh keys", func() {
+															It("Should requeue if failed to get the configMap for the osbuild-worker config", func() {
 																// given
-																secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(nil, errFailed)
+																configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errFailed)
 																// when
 																result, err := reconciler.Reconcile(requestContext, request)
 																// then
@@ -1071,15 +1051,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																Expect(result).To(Equal(resultRequeue))
 															})
 
-															Context("Secret for osbuild-worker ssh keys not found", func() {
+															Context("ConfigMap for osbuild-worker config not found", func() {
 																BeforeEach(func() {
-																	secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(nil, errNotFound)
+																	configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(nil, errNotFound)
 																})
 
-																It("Should return en error if failed to create the ssh keys", func() {
+																It("Should requeue if failed to create the configMap for the osbuild-worker config", func() {
 																	// given
-																	sshGenerateError := fmt.Errorf("failed to generate ssh keys")
-																	sshKeyGenerator.EXPECT().GenerateSSHKeyPair().Return(nil, nil, sshGenerateError)
+																	configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																	// when
 																	result, err := reconciler.Reconcile(requestContext, request)
 																	// then
@@ -1087,41 +1066,57 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																	Expect(result).To(Equal(resultRequeue))
 																})
 
-																Context("Successfully created the ssh keys", func() {
-																	BeforeEach(func() {
-																		sshKeyGenerator.EXPECT().GenerateSSHKeyPair().Return(sshPrivateKey, sshPublicKey, nil)
-																	})
-
-																	It("Should requeue if failed to create the secret for the osbuild-worker ssh keys", func() {
-																		// given
-																		secretRepository.EXPECT().Create(requestContext, workerSSHKeysSecret).Return(errFailed)
-																		// when
-																		result, err := reconciler.Reconcile(requestContext, request)
-																		// then
-																		Expect(err).To(BeNil())
-																		Expect(result).To(Equal(resultRequeue))
-																	})
-
-																	It("Should return requeue if succeeded to create the secret for the osbuild-worker ssh keys", func() {
-																		// given
-																		secretRepository.EXPECT().Create(requestContext, workerSSHKeysSecret).Return(nil)
-																		// when
-																		result, err := reconciler.Reconcile(requestContext, request)
-																		// then
-																		Expect(err).To(BeNil())
-																		Expect(result).To(Equal(resultQuickRequeue))
-																	})
+																It("Should return requeue if succeeded to create the configMap for the osbuild-worker config", func() {
+																	// given
+																	configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+																	// when
+																	result, err := reconciler.Reconcile(requestContext, request)
+																	// then
+																	Expect(err).To(BeNil())
+																	Expect(result).To(Equal(resultQuickRequeue))
 																})
 															})
 
-															Context("Secret for osbuild-worker ssh keys exists", func() {
+															Context("ConfigMap for the osbuild-worker config exists", func() {
+																const (
+																	workerSSHKeysSecretName    = "osbuild-worker-ssh" // #nosec G101
+																	workerSSHKeysPrivateKeyKey = "ssh-privatekey"
+																	workerSSHKeysPublicKeyKey  = "ssh-publickey"
+																)
+
+																var (
+																	workerOSBuildWorkerConfigConfigMap = corev1.ConfigMap{
+																		ObjectMeta: metav1.ObjectMeta{
+																			Namespace: operatorNamespace,
+																			Name:      workerOSBuildWorkerConfigConfigMapName,
+																		},
+																	}
+
+																	sshPrivateKey = []byte("sshPrivateKey")
+																	sshPublicKey  = []byte("sshPublicKey")
+
+																	workerSSHKeysSecret *corev1.Secret
+																)
+
 																BeforeEach(func() {
-																	secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(workerSSHKeysSecret, nil)
+																	configMapRepository.EXPECT().Read(requestContext, workerOSBuildWorkerConfigConfigMapName, operatorNamespace).Return(&workerOSBuildWorkerConfigConfigMap, nil)
+																	workerSSHKeysSecret = &corev1.Secret{
+																		ObjectMeta: metav1.ObjectMeta{
+																			Name:            workerSSHKeysSecretName,
+																			Namespace:       operatorNamespace,
+																			OwnerReferences: []metav1.OwnerReference{ownerReference},
+																		},
+																		Immutable: pointer.Bool(true),
+																		StringData: map[string]string{
+																			workerSSHKeysPrivateKeyKey: string(sshPrivateKey),
+																			workerSSHKeysPublicKeyKey:  string(sshPublicKey),
+																		},
+																	}
 																})
 
-																It("Should requeue if failed to get the VirtualMachine for the internal builder", func() {
+																It("Should requeue if failed to get the secret for the osbuild-worker ssh keys", func() {
 																	// given
-																	virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errFailed)
+																	secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(nil, errFailed)
 																	// when
 																	result, err := reconciler.Reconcile(requestContext, request)
 																	// then
@@ -1129,14 +1124,15 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																	Expect(result).To(Equal(resultRequeue))
 																})
 
-																Context("VirtualMachine for the internal builder not found", func() {
+																Context("Secret for osbuild-worker ssh keys not found", func() {
 																	BeforeEach(func() {
-																		virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errNotFound)
+																		secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(nil, errNotFound)
 																	})
 
-																	It("Should requeue if failed to create the VirtualMachine for the internal builder", func() {
+																	It("Should return en error if failed to create the ssh keys", func() {
 																		// given
-																		virtualMachineRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+																		sshGenerateError := fmt.Errorf("failed to generate ssh keys")
+																		sshKeyGenerator.EXPECT().GenerateSSHKeyPair().Return(nil, nil, sshGenerateError)
 																		// when
 																		result, err := reconciler.Reconcile(requestContext, request)
 																		// then
@@ -1144,64 +1140,41 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																		Expect(result).To(Equal(resultRequeue))
 																	})
 
-																	It("Should return requeue if succeeded to create the VirtualMachine for the internal builder", func() {
-																		// given
-																		virtualMachineRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
-																		// when
-																		result, err := reconciler.Reconcile(requestContext, request)
-																		// then
-																		Expect(err).To(BeNil())
-																		Expect(result).To(Equal(resultQuickRequeue))
+																	Context("Successfully created the ssh keys", func() {
+																		BeforeEach(func() {
+																			sshKeyGenerator.EXPECT().GenerateSSHKeyPair().Return(sshPrivateKey, sshPublicKey, nil)
+																		})
+
+																		It("Should requeue if failed to create the secret for the osbuild-worker ssh keys", func() {
+																			// given
+																			secretRepository.EXPECT().Create(requestContext, workerSSHKeysSecret).Return(errFailed)
+																			// when
+																			result, err := reconciler.Reconcile(requestContext, request)
+																			// then
+																			Expect(err).To(BeNil())
+																			Expect(result).To(Equal(resultRequeue))
+																		})
+
+																		It("Should return requeue if succeeded to create the secret for the osbuild-worker ssh keys", func() {
+																			// given
+																			secretRepository.EXPECT().Create(requestContext, workerSSHKeysSecret).Return(nil)
+																			// when
+																			result, err := reconciler.Reconcile(requestContext, request)
+																			// then
+																			Expect(err).To(BeNil())
+																			Expect(result).To(Equal(resultQuickRequeue))
+																		})
 																	})
 																})
 
-																Context("VirtualMachine for the internal builder exists", func() {
-																	const (
-																		workerSSHServiceNameFormat = "worker-%s-ssh"
-																		workerSSHPortName          = "ssh"
-																	)
-
-																	var (
-																		workerSSHServiceName = fmt.Sprintf(workerSSHServiceNameFormat, internalBuilderName)
-																		internalBuilderVM    *kubevirtv1.VirtualMachine
-																		workerSSHService     *corev1.Service
-																	)
-
+																Context("Secret for osbuild-worker ssh keys exists", func() {
 																	BeforeEach(func() {
-																		internalBuilderVM = &kubevirtv1.VirtualMachine{
-																			ObjectMeta: metav1.ObjectMeta{
-																				Name:      internalBuilderName,
-																				Namespace: operatorNamespace,
-																			},
-																		}
-																		virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(internalBuilderVM, nil)
-
-																		workerSSHService = &corev1.Service{
-																			ObjectMeta: metav1.ObjectMeta{
-																				Namespace:       operatorNamespace,
-																				Name:            workerSSHServiceName,
-																				OwnerReferences: []metav1.OwnerReference{ownerReference},
-																			},
-																			Spec: corev1.ServiceSpec{
-																				Type: corev1.ServiceTypeClusterIP,
-																				Ports: []corev1.ServicePort{
-																					{
-																						Name:       workerSSHPortName,
-																						Port:       22,
-																						Protocol:   "TCP",
-																						TargetPort: intstr.FromInt(22),
-																					},
-																				},
-																				Selector: map[string]string{
-																					"osbuild-worker": internalBuilderName,
-																				},
-																			},
-																		}
+																		secretRepository.EXPECT().Read(requestContext, workerSSHKeysSecretName, operatorNamespace).Return(workerSSHKeysSecret, nil)
 																	})
 
-																	It("Should requeue if failed to get the ssh service of the internal builder", func() {
+																	It("Should requeue if failed to get the VirtualMachine for the internal builder", func() {
 																		// given
-																		serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(nil, errFailed)
+																		virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errFailed)
 																		// when
 																		result, err := reconciler.Reconcile(requestContext, request)
 																		// then
@@ -1209,14 +1182,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																		Expect(result).To(Equal(resultRequeue))
 																	})
 
-																	Context("SSH Service for the internal builder not found", func() {
+																	Context("VirtualMachine for the internal builder not found", func() {
 																		BeforeEach(func() {
-																			serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(nil, errNotFound)
+																			virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errNotFound)
 																		})
 
-																		It("Should requeue if failed to create the SSH Service for the internal builder", func() {
+																		It("Should requeue if failed to create the VirtualMachine for the internal builder", func() {
 																			// given
-																			serviceRepository.EXPECT().Create(requestContext, workerSSHService).Return(errFailed)
+																			virtualMachineRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																			// when
 																			result, err := reconciler.Reconcile(requestContext, request)
 																			// then
@@ -1224,9 +1197,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																			Expect(result).To(Equal(resultRequeue))
 																		})
 
-																		It("Should return requeue if succeeded to create the SSH Service for the internal builder", func() {
+																		It("Should return requeue if succeeded to create the VirtualMachine for the internal builder", func() {
 																			// given
-																			serviceRepository.EXPECT().Create(requestContext, workerSSHService).Return(nil)
+																			virtualMachineRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 																			// when
 																			result, err := reconciler.Reconcile(requestContext, request)
 																			// then
@@ -1235,14 +1208,53 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																		})
 																	})
 
-																	Context("SSH Service for the internal builder exists", func() {
+																	Context("VirtualMachine for the internal builder exists", func() {
+																		const (
+																			workerSSHServiceNameFormat = "worker-%s-ssh"
+																			workerSSHPortName          = "ssh"
+																		)
+
+																		var (
+																			workerSSHServiceName = fmt.Sprintf(workerSSHServiceNameFormat, internalBuilderName)
+																			internalBuilderVM    *kubevirtv1.VirtualMachine
+																			workerSSHService     *corev1.Service
+																		)
+
 																		BeforeEach(func() {
-																			serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(workerSSHService, nil)
+																			internalBuilderVM = &kubevirtv1.VirtualMachine{
+																				ObjectMeta: metav1.ObjectMeta{
+																					Name:      internalBuilderName,
+																					Namespace: operatorNamespace,
+																				},
+																			}
+																			virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(internalBuilderVM, nil)
+
+																			workerSSHService = &corev1.Service{
+																				ObjectMeta: metav1.ObjectMeta{
+																					Namespace:       operatorNamespace,
+																					Name:            workerSSHServiceName,
+																					OwnerReferences: []metav1.OwnerReference{ownerReference},
+																				},
+																				Spec: corev1.ServiceSpec{
+																					Type: corev1.ServiceTypeClusterIP,
+																					Ports: []corev1.ServicePort{
+																						{
+																							Name:       workerSSHPortName,
+																							Port:       22,
+																							Protocol:   "TCP",
+																							TargetPort: intstr.FromInt(22),
+																						},
+																					},
+																					Selector: map[string]string{
+																						"osbuild-worker": internalBuilderName,
+																					},
+																				},
+																			}
 																		})
 
-																		It("Should fail if failed to get the VM of the internal worker", func() {
+																		It("Should requeue if failed to get the ssh service of the internal builder", func() {
 																			// given
-																			virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errFailed)
+																			serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(nil, errFailed)
 																			// when
 																			result, err := reconciler.Reconcile(requestContext, request)
 																			// then
@@ -1250,64 +1262,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																			Expect(result).To(Equal(resultRequeue))
 																		})
 
-																		It("Should return requeue if the internal worker VM is not ready", func() {
-																			// given
-																			virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(internalBuilderVM, nil)
-																			// when
-																			result, err := reconciler.Reconcile(requestContext, request)
-																			// then
-																			Expect(err).To(BeNil())
-																			Expect(result).To(Equal(resultQuickRequeue))
-																		})
-
-																		Context("Internal worker VM is ready", func() {
-																			const (
-																				workerCertificateNameFormat = "worker-%s-cert"
-																			)
-
-																			var (
-																				internalBuilderCertificateName = fmt.Sprintf(workerCertificateNameFormat, internalBuilderName)
-																				internalBuilderCertificate     *certmanagerv1.Certificate
-																			)
-
+																		Context("SSH Service for the internal builder not found", func() {
 																			BeforeEach(func() {
-																				internalBuilderVM.Status.Conditions = []kubevirtv1.VirtualMachineCondition{
-																					{
-																						Type:   kubevirtv1.VirtualMachineReady,
-																						Status: corev1.ConditionTrue,
-																					},
-																				}
-																				virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(internalBuilderVM, nil)
-																				internalBuilderCertificate = &certmanagerv1.Certificate{
-																					ObjectMeta: metav1.ObjectMeta{
-																						Name:            internalBuilderCertificateName,
-																						Namespace:       operatorNamespace,
-																						OwnerReferences: []metav1.OwnerReference{ownerReference},
-																					},
-																					Spec: certmanagerv1.CertificateSpec{
-																						SecretName: internalBuilderCertificateName,
-																						PrivateKey: &certmanagerv1.CertificatePrivateKey{
-																							Algorithm: "ECDSA",
-																							Size:      256,
-																						},
-																						DNSNames: []string{
-																							internalBuilderName,
-																						},
-																						Duration: &metav1.Duration{
-																							Duration: time.Hour * certificateDuration,
-																						},
-																						IssuerRef: certmanagermetav1.ObjectReference{
-																							Group: "cert-manager.io",
-																							Kind:  "Issuer",
-																							Name:  caIssuerName,
-																						},
-																					},
-																				}
+																				serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(nil, errNotFound)
 																			})
 
-																			It("Should requeue if failed to get the certificate of the internal builder", func() {
+																			It("Should requeue if failed to create the SSH Service for the internal builder", func() {
 																				// given
-																				certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errFailed)
+																				serviceRepository.EXPECT().Create(requestContext, workerSSHService).Return(errFailed)
 																				// when
 																				result, err := reconciler.Reconcile(requestContext, request)
 																				// then
@@ -1315,49 +1277,90 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																				Expect(result).To(Equal(resultRequeue))
 																			})
 
-																			Context("Certificate for the internal builder not found", func() {
-																				BeforeEach(func() {
-																					certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errNotFound)
-																				})
+																			It("Should return requeue if succeeded to create the SSH Service for the internal builder", func() {
+																				// given
+																				serviceRepository.EXPECT().Create(requestContext, workerSSHService).Return(nil)
+																				// when
+																				result, err := reconciler.Reconcile(requestContext, request)
+																				// then
+																				Expect(err).To(BeNil())
+																				Expect(result).To(Equal(resultQuickRequeue))
+																			})
+																		})
 
-																				It("Should requeue if failed to create the Certificate for the internal builder", func() {
-																					// given
-																					certificateRepository.EXPECT().Create(requestContext, internalBuilderCertificate).Return(errFailed)
-																					// when
-																					result, err := reconciler.Reconcile(requestContext, request)
-																					// then
-																					Expect(err).To(BeNil())
-																					Expect(result).To(Equal(resultRequeue))
-																				})
-
-																				It("Should return requeue if succeeded to create the Certificate for the internal builder", func() {
-																					// given
-																					certificateRepository.EXPECT().Create(requestContext, internalBuilderCertificate).Return(nil)
-																					// when
-																					result, err := reconciler.Reconcile(requestContext, request)
-																					// then
-																					Expect(err).To(BeNil())
-																					Expect(result).To(Equal(resultQuickRequeue))
-																				})
+																		Context("SSH Service for the internal builder exists", func() {
+																			BeforeEach(func() {
+																				serviceRepository.EXPECT().Read(requestContext, workerSSHServiceName, operatorNamespace).Return(workerSSHService, nil)
 																			})
 
-																			Context("Certificate for the internal builder exists", func() {
-																				var (
-																					internalBuilderCertificateSecret *corev1.Secret
+																			It("Should fail if failed to get the VM of the internal worker", func() {
+																				// given
+																				virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(nil, errFailed)
+																				// when
+																				result, err := reconciler.Reconcile(requestContext, request)
+																				// then
+																				Expect(err).To(BeNil())
+																				Expect(result).To(Equal(resultRequeue))
+																			})
+
+																			It("Should return requeue if the internal worker VM is not ready", func() {
+																				// given
+																				virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(internalBuilderVM, nil)
+																				// when
+																				result, err := reconciler.Reconcile(requestContext, request)
+																				// then
+																				Expect(err).To(BeNil())
+																				Expect(result).To(Equal(resultQuickRequeue))
+																			})
+
+																			Context("Internal worker VM is ready", func() {
+																				const (
+																					workerCertificateNameFormat = "worker-%s-cert"
 																				)
+
+																				var (
+																					internalBuilderCertificateName = fmt.Sprintf(workerCertificateNameFormat, internalBuilderName)
+																					internalBuilderCertificate     *certmanagerv1.Certificate
+																				)
+
 																				BeforeEach(func() {
-																					certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(internalBuilderCertificate, nil)
-																					internalBuilderCertificateSecret = &corev1.Secret{
+																					internalBuilderVM.Status.Conditions = []kubevirtv1.VirtualMachineCondition{
+																						{
+																							Type:   kubevirtv1.VirtualMachineReady,
+																							Status: corev1.ConditionTrue,
+																						},
+																					}
+																					virtualMachineRepository.EXPECT().Read(requestContext, internalBuilderName, operatorNamespace).Return(internalBuilderVM, nil)
+																					internalBuilderCertificate = &certmanagerv1.Certificate{
 																						ObjectMeta: metav1.ObjectMeta{
-																							Namespace: operatorNamespace,
-																							Name:      internalBuilderCertificateName,
+																							Name:            internalBuilderCertificateName,
+																							Namespace:       operatorNamespace,
+																							OwnerReferences: []metav1.OwnerReference{ownerReference},
+																						},
+																						Spec: certmanagerv1.CertificateSpec{
+																							SecretName: internalBuilderCertificateName,
+																							PrivateKey: &certmanagerv1.CertificatePrivateKey{
+																								Algorithm: "ECDSA",
+																								Size:      256,
+																							},
+																							DNSNames: []string{
+																								internalBuilderName,
+																							},
+																							Duration: &metav1.Duration{
+																								Duration: time.Hour * certificateDuration,
+																							},
+																							IssuerRef: certmanagermetav1.ObjectReference{
+																								Group: "cert-manager.io",
+																								Kind:  "Issuer",
+																								Name:  caIssuerName,
+																							},
 																						},
 																					}
 																				})
 
-																				It("Should requeue if failed to get the secret of the certificate of the internal builder", func() {
+																				It("Should requeue if failed to get the certificate of the internal builder", func() {
 																					// given
-																					secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errFailed)
+																					certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errFailed)
 																					// when
 																					result, err := reconciler.Reconcile(requestContext, request)
 																					// then
@@ -1365,23 +1368,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																					Expect(result).To(Equal(resultRequeue))
 																				})
 
-																				Context("The Secret of the Certificate for the internal builder is not owned by the instance", func() {
-																					var (
-																						originalInternalBuilderCertificateSecret *corev1.Secret
-																						updatedInternalBuilderCertificateSecret  *corev1.Secret
-																					)
-
+																				Context("Certificate for the internal builder not found", func() {
 																					BeforeEach(func() {
-																						secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(internalBuilderCertificateSecret, nil)
-
-																						originalInternalBuilderCertificateSecret = internalBuilderCertificateSecret.DeepCopy()
-																						updatedInternalBuilderCertificateSecret = internalBuilderCertificateSecret.DeepCopy()
-																						updatedInternalBuilderCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
+																						certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errNotFound)
 																					})
 
-																					It("Should requeue if failed to own the secret of the Certificate for the internal builder", func() {
+																					It("Should requeue if failed to create the Certificate for the internal builder", func() {
 																						// given
-																						secretRepository.EXPECT().Patch(requestContext, originalInternalBuilderCertificateSecret, updatedInternalBuilderCertificateSecret).Return(errFailed)
+																						certificateRepository.EXPECT().Create(requestContext, internalBuilderCertificate).Return(errFailed)
 																						// when
 																						result, err := reconciler.Reconcile(requestContext, request)
 																						// then
@@ -1389,9 +1383,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																						Expect(result).To(Equal(resultRequeue))
 																					})
 
-																					It("Should return requeue if succeeded to set the owner of the secret of the Certificate for the internal builder", func() {
+																					It("Should return requeue if succeeded to create the Certificate for the internal builder", func() {
 																						// given
-																						secretRepository.EXPECT().Patch(requestContext, originalInternalBuilderCertificateSecret, updatedInternalBuilderCertificateSecret).Return(nil)
+																						certificateRepository.EXPECT().Create(requestContext, internalBuilderCertificate).Return(nil)
 																						// when
 																						result, err := reconciler.Reconcile(requestContext, request)
 																						// then
@@ -1400,21 +1394,23 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																					})
 																				})
 
-																				Context("Internal Builder Certificate Secret Owner is already set", func() {
-																					const (
-																						workerSetupPlaybookConfigMapNameFormat = "worker-%s-setup-playbook"
-																					)
+																				Context("Certificate for the internal builder exists", func() {
 																					var (
-																						internalBuilderSetupPlaybookConfigMapName = fmt.Sprintf(workerSetupPlaybookConfigMapNameFormat, internalBuilderName)
+																						internalBuilderCertificateSecret *corev1.Secret
 																					)
 																					BeforeEach(func() {
-																						internalBuilderCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
-																						secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(internalBuilderCertificateSecret, nil)
+																						certificateRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(internalBuilderCertificate, nil)
+																						internalBuilderCertificateSecret = &corev1.Secret{
+																							ObjectMeta: metav1.ObjectMeta{
+																								Namespace: operatorNamespace,
+																								Name:      internalBuilderCertificateName,
+																							},
+																						}
 																					})
 
-																					It("Should requeue if failed to get the configMap for the setup playbook of the internal builder", func() {
+																					It("Should requeue if failed to get the secret of the certificate of the internal builder", func() {
 																						// given
-																						configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(nil, errFailed)
+																						secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(nil, errFailed)
 																						// when
 																						result, err := reconciler.Reconcile(requestContext, request)
 																						// then
@@ -1422,14 +1418,23 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																						Expect(result).To(Equal(resultRequeue))
 																					})
 
-																					Context("The configMap for the setup playbook for the internal builder not found", func() {
+																					Context("The Secret of the Certificate for the internal builder is not owned by the instance", func() {
+																						var (
+																							originalInternalBuilderCertificateSecret *corev1.Secret
+																							updatedInternalBuilderCertificateSecret  *corev1.Secret
+																						)
+
 																						BeforeEach(func() {
-																							configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(nil, errNotFound)
+																							secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(internalBuilderCertificateSecret, nil)
+
+																							originalInternalBuilderCertificateSecret = internalBuilderCertificateSecret.DeepCopy()
+																							updatedInternalBuilderCertificateSecret = internalBuilderCertificateSecret.DeepCopy()
+																							updatedInternalBuilderCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
 																						})
 
-																						It("Should requeue if failed to create the configMap for the setup playbook for the internal builder", func() {
+																						It("Should requeue if failed to own the secret of the Certificate for the internal builder", func() {
 																							// given
-																							configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+																							secretRepository.EXPECT().Patch(requestContext, originalInternalBuilderCertificateSecret, updatedInternalBuilderCertificateSecret).Return(errFailed)
 																							// when
 																							result, err := reconciler.Reconcile(requestContext, request)
 																							// then
@@ -1437,9 +1442,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																							Expect(result).To(Equal(resultRequeue))
 																						})
 
-																						It("Should return requeue if succeeded to create the configMap for the setup playbook for the internal builder", func() {
+																						It("Should return requeue if succeeded to set the owner of the secret of the Certificate for the internal builder", func() {
 																							// given
-																							configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+																							secretRepository.EXPECT().Patch(requestContext, originalInternalBuilderCertificateSecret, updatedInternalBuilderCertificateSecret).Return(nil)
 																							// when
 																							result, err := reconciler.Reconcile(requestContext, request)
 																							// then
@@ -1448,27 +1453,21 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																						})
 																					})
 
-																					Context("The configMap for the setup playbook for the internal builder exists", func() {
+																					Context("Internal Builder Certificate Secret Owner is already set", func() {
 																						const (
-																							workerSetupInventoryConfigMapNameFormat = "worker-%s-inventory"
+																							workerSetupPlaybookConfigMapNameFormat = "worker-%s-setup-playbook"
 																						)
 																						var (
-																							internalBuilderSetupInventoryConfigMapName = fmt.Sprintf(workerSetupInventoryConfigMapNameFormat, internalBuilderName)
-																							internalBuilderSetupPlaybookConfigMap      = &corev1.ConfigMap{
-																								ObjectMeta: metav1.ObjectMeta{
-																									Name:      internalBuilderSetupPlaybookConfigMapName,
-																									Namespace: operatorNamespace,
-																								},
-																							}
+																							internalBuilderSetupPlaybookConfigMapName = fmt.Sprintf(workerSetupPlaybookConfigMapNameFormat, internalBuilderName)
 																						)
-
 																						BeforeEach(func() {
-																							configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(internalBuilderSetupPlaybookConfigMap, nil)
+																							internalBuilderCertificateSecret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownerReference}
+																							secretRepository.EXPECT().Read(requestContext, internalBuilderCertificateName, operatorNamespace).Return(internalBuilderCertificateSecret, nil)
 																						})
 
-																						It("Should requeue if failed to get the configMap for the setup inventory of the internal builder", func() {
+																						It("Should requeue if failed to get the configMap for the setup playbook of the internal builder", func() {
 																							// given
-																							configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(nil, errFailed)
+																							configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(nil, errFailed)
 																							// when
 																							result, err := reconciler.Reconcile(requestContext, request)
 																							// then
@@ -1478,10 +1477,10 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 
 																						Context("The configMap for the setup playbook for the internal builder not found", func() {
 																							BeforeEach(func() {
-																								configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(nil, errNotFound)
+																								configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(nil, errNotFound)
 																							})
 
-																							It("Should requeue if failed to create the configMap for the setup inventory for the internal builder", func() {
+																							It("Should requeue if failed to create the configMap for the setup playbook for the internal builder", func() {
 																								// given
 																								configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																								// when
@@ -1491,7 +1490,7 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																								Expect(result).To(Equal(resultRequeue))
 																							})
 
-																							It("Should return requeue if succeeded to create the configMap for the setup inventory for the internal builder", func() {
+																							It("Should return requeue if succeeded to create the configMap for the setup playbook for the internal builder", func() {
 																								// given
 																								configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 																								// when
@@ -1502,27 +1501,27 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																							})
 																						})
 
-																						Context("The configMap for the setup inventory for the internal builder exists", func() {
+																						Context("The configMap for the setup playbook for the internal builder exists", func() {
 																							const (
-																								workerSetupJobNameFormat = "worker-%s-setup"
+																								workerSetupInventoryConfigMapNameFormat = "worker-%s-inventory"
 																							)
 																							var (
-																								internalBuilderSetupJobName            = fmt.Sprintf(workerSetupJobNameFormat, internalBuilderName)
-																								internalBuilderSetupInventoryConfigMap = &corev1.ConfigMap{
+																								internalBuilderSetupInventoryConfigMapName = fmt.Sprintf(workerSetupInventoryConfigMapNameFormat, internalBuilderName)
+																								internalBuilderSetupPlaybookConfigMap      = &corev1.ConfigMap{
 																									ObjectMeta: metav1.ObjectMeta{
-																										Name:      internalBuilderSetupInventoryConfigMapName,
+																										Name:      internalBuilderSetupPlaybookConfigMapName,
 																										Namespace: operatorNamespace,
 																									},
 																								}
 																							)
 
 																							BeforeEach(func() {
-																								configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(internalBuilderSetupInventoryConfigMap, nil)
+																								configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(internalBuilderSetupPlaybookConfigMap, nil)
 																							})
 
-																							It("Should requeue if failed to get the job for the setup of the internal builder", func() {
+																							It("Should requeue if failed to get the configMap for the setup inventory of the internal builder", func() {
 																								// given
-																								jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(nil, errFailed)
+																								configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(nil, errFailed)
 																								// when
 																								result, err := reconciler.Reconcile(requestContext, request)
 																								// then
@@ -1530,14 +1529,14 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																								Expect(result).To(Equal(resultRequeue))
 																							})
 
-																							Context("The job for the setup for the internal builder not found", func() {
+																							Context("The configMap for the setup playbook for the internal builder not found", func() {
 																								BeforeEach(func() {
-																									jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(nil, errNotFound)
+																									configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(nil, errNotFound)
 																								})
 
-																								It("Should requeue if failed to create the job for the setup for the internal builder", func() {
+																								It("Should requeue if failed to create the configMap for the setup inventory for the internal builder", func() {
 																									// given
-																									jobRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+																									configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
 																									// when
 																									result, err := reconciler.Reconcile(requestContext, request)
 																									// then
@@ -1545,9 +1544,9 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																									Expect(result).To(Equal(resultRequeue))
 																								})
 
-																								It("Should return requeue if succeeded to create the job for the setup for the internal builder", func() {
+																								It("Should return requeue if succeeded to create the configMap for the setup inventory for the internal builder", func() {
 																									// given
-																									jobRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+																									configMapRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
 																									// when
 																									result, err := reconciler.Reconcile(requestContext, request)
 																									// then
@@ -1556,130 +1555,289 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 																								})
 																							})
 
-																							Context("The job for the setup for the internal builder exists", func() {
+																							Context("The configMap for the setup inventory for the internal builder exists", func() {
+																								const (
+																									workerSetupJobNameFormat = "worker-%s-setup"
+																								)
 																								var (
-																									internalBuilderSetupJob = &batchv1.Job{
+																									internalBuilderSetupJobName            = fmt.Sprintf(workerSetupJobNameFormat, internalBuilderName)
+																									internalBuilderSetupInventoryConfigMap = &corev1.ConfigMap{
 																										ObjectMeta: metav1.ObjectMeta{
-																											Name:      internalBuilderSetupJobName,
+																											Name:      internalBuilderSetupInventoryConfigMapName,
 																											Namespace: operatorNamespace,
 																										},
 																									}
 																								)
 
 																								BeforeEach(func() {
-																									jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(internalBuilderSetupJob, nil)
+																									configMapRepository.EXPECT().Read(requestContext, internalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(internalBuilderSetupInventoryConfigMap, nil)
 																								})
 
-																								Context("The certificate for the external builder exists", func() {
+																								It("Should requeue if failed to get the job for the setup of the internal builder", func() {
+																									// given
+																									jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(nil, errFailed)
+																									// when
+																									result, err := reconciler.Reconcile(requestContext, request)
+																									// then
+																									Expect(err).To(BeNil())
+																									Expect(result).To(Equal(resultRequeue))
+																								})
+
+																								Context("The job for the setup for the internal builder not found", func() {
+																									BeforeEach(func() {
+																										jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(nil, errNotFound)
+																									})
+
+																									It("Should requeue if failed to create the job for the setup for the internal builder", func() {
+																										// given
+																										jobRepository.EXPECT().Create(requestContext, gomock.Any()).Return(errFailed)
+																										// when
+																										result, err := reconciler.Reconcile(requestContext, request)
+																										// then
+																										Expect(err).To(BeNil())
+																										Expect(result).To(Equal(resultRequeue))
+																									})
+
+																									It("Should return requeue if succeeded to create the job for the setup for the internal builder", func() {
+																										// given
+																										jobRepository.EXPECT().Create(requestContext, gomock.Any()).Return(nil)
+																										// when
+																										result, err := reconciler.Reconcile(requestContext, request)
+																										// then
+																										Expect(err).To(BeNil())
+																										Expect(result).To(Equal(resultQuickRequeue))
+																									})
+																								})
+
+																								Context("The job for the setup for the internal builder exists", func() {
 																									var (
-																										externalBuilderCertificateName = fmt.Sprintf(workerCertificateNameFormat, externalBuilderName)
-																										externalBuilderCertificate     *certmanagerv1.Certificate
+																										internalBuilderSetupJob = &batchv1.Job{
+																											ObjectMeta: metav1.ObjectMeta{
+																												Name:      internalBuilderSetupJobName,
+																												Namespace: operatorNamespace,
+																											},
+																										}
 																									)
 
 																									BeforeEach(func() {
-																										externalBuilderCertificate = &certmanagerv1.Certificate{
-																											ObjectMeta: metav1.ObjectMeta{
-																												Name:            externalBuilderCertificateName,
-																												Namespace:       operatorNamespace,
-																												OwnerReferences: []metav1.OwnerReference{ownerReference},
-																											},
-																											Spec: certmanagerv1.CertificateSpec{
-																												SecretName: externalBuilderCertificateName,
-																												PrivateKey: &certmanagerv1.CertificatePrivateKey{
-																													Algorithm: "ECDSA",
-																													Size:      256,
-																												},
-																												DNSNames: []string{
-																													externalBuilderName,
-																												},
-																												Duration: &metav1.Duration{
-																													Duration: time.Hour * certificateDuration,
-																												},
-																												IssuerRef: certmanagermetav1.ObjectReference{
-																													Group: "cert-manager.io",
-																													Kind:  "Issuer",
-																													Name:  caIssuerName,
-																												},
-																											},
-																										}
-																										certificateRepository.EXPECT().Read(requestContext, externalBuilderCertificateName, operatorNamespace).Return(externalBuilderCertificate, nil)
+																										jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(internalBuilderSetupJob, nil)
 																									})
 
-																									Context("The Secret of the certificate of the external worker is owned by the instance", func() {
+																									Context("The certificate for the external builder exists", func() {
 																										var (
-																											externalBuilderCertificateSecret *corev1.Secret
+																											externalBuilderCertificateName = fmt.Sprintf(workerCertificateNameFormat, externalBuilderName)
+																											externalBuilderCertificate     *certmanagerv1.Certificate
 																										)
 
 																										BeforeEach(func() {
-																											externalBuilderCertificateSecret = &corev1.Secret{
+																											externalBuilderCertificate = &certmanagerv1.Certificate{
 																												ObjectMeta: metav1.ObjectMeta{
+																													Name:            externalBuilderCertificateName,
 																													Namespace:       operatorNamespace,
-																													Name:            internalBuilderCertificateName,
 																													OwnerReferences: []metav1.OwnerReference{ownerReference},
 																												},
+																												Spec: certmanagerv1.CertificateSpec{
+																													SecretName: externalBuilderCertificateName,
+																													PrivateKey: &certmanagerv1.CertificatePrivateKey{
+																														Algorithm: "ECDSA",
+																														Size:      256,
+																													},
+																													DNSNames: []string{
+																														externalBuilderName,
+																													},
+																													Duration: &metav1.Duration{
+																														Duration: time.Hour * certificateDuration,
+																													},
+																													IssuerRef: certmanagermetav1.ObjectReference{
+																														Group: "cert-manager.io",
+																														Kind:  "Issuer",
+																														Name:  caIssuerName,
+																													},
+																												},
 																											}
-																											secretRepository.EXPECT().Read(requestContext, externalBuilderCertificateName, operatorNamespace).Return(externalBuilderCertificateSecret, nil)
+																											certificateRepository.EXPECT().Read(requestContext, externalBuilderCertificateName, operatorNamespace).Return(externalBuilderCertificate, nil)
 																										})
 
-																										Context("The ConfigMap for the playbook of the external builder setup exists", func() {
+																										Context("The Secret of the certificate of the external worker is owned by the instance", func() {
 																											var (
-																												externalBuilderSetupPlaybookConfigMapName = fmt.Sprintf(workerSetupPlaybookConfigMapNameFormat, externalBuilderName)
-																												externalBuilderSetupPlaybookConfigMap     = &corev1.ConfigMap{
-																													ObjectMeta: metav1.ObjectMeta{
-																														Name:      externalBuilderSetupPlaybookConfigMapName,
-																														Namespace: operatorNamespace,
-																													},
-																												}
+																												externalBuilderCertificateSecret *corev1.Secret
 																											)
 
 																											BeforeEach(func() {
-																												configMapRepository.EXPECT().Read(requestContext, externalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(externalBuilderSetupPlaybookConfigMap, nil)
+																												externalBuilderCertificateSecret = &corev1.Secret{
+																													ObjectMeta: metav1.ObjectMeta{
+																														Namespace:       operatorNamespace,
+																														Name:            internalBuilderCertificateName,
+																														OwnerReferences: []metav1.OwnerReference{ownerReference},
+																													},
+																												}
+																												secretRepository.EXPECT().Read(requestContext, externalBuilderCertificateName, operatorNamespace).Return(externalBuilderCertificateSecret, nil)
 																											})
 
-																											Context("The ConfigMap for the inventory of the external builder setup exists", func() {
+																											Context("The ConfigMap for the playbook of the external builder setup exists", func() {
 																												var (
-																													externalBuilderSetupInventoryConfigMapName = fmt.Sprintf(workerSetupInventoryConfigMapNameFormat, externalBuilderName)
-																													externalBuilderSetupInventoryConfigMap     = &corev1.ConfigMap{
+																													externalBuilderSetupPlaybookConfigMapName = fmt.Sprintf(workerSetupPlaybookConfigMapNameFormat, externalBuilderName)
+																													externalBuilderSetupPlaybookConfigMap     = &corev1.ConfigMap{
 																														ObjectMeta: metav1.ObjectMeta{
-																															Name:      externalBuilderSetupInventoryConfigMapName,
+																															Name:      externalBuilderSetupPlaybookConfigMapName,
 																															Namespace: operatorNamespace,
 																														},
 																													}
 																												)
 
 																												BeforeEach(func() {
-																													configMapRepository.EXPECT().Read(requestContext, externalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(externalBuilderSetupInventoryConfigMap, nil)
+																													configMapRepository.EXPECT().Read(requestContext, externalBuilderSetupPlaybookConfigMapName, operatorNamespace).Return(externalBuilderSetupPlaybookConfigMap, nil)
 																												})
 
-																												Context("The job for the external builder setup exists", func() {
+																												Context("The ConfigMap for the inventory of the external builder setup exists", func() {
 																													var (
-																														externalBuilderSetupJobName = fmt.Sprintf(workerSetupJobNameFormat, externalBuilderName)
-																														externalBuilderSetupJob     = &batchv1.Job{
+																														externalBuilderSetupInventoryConfigMapName = fmt.Sprintf(workerSetupInventoryConfigMapNameFormat, externalBuilderName)
+																														externalBuilderSetupInventoryConfigMap     = &corev1.ConfigMap{
 																															ObjectMeta: metav1.ObjectMeta{
-																																Name:      externalBuilderSetupJobName,
+																																Name:      externalBuilderSetupInventoryConfigMapName,
 																																Namespace: operatorNamespace,
 																															},
 																														}
 																													)
 
 																													BeforeEach(func() {
-																														jobRepository.EXPECT().Read(requestContext, externalBuilderSetupJobName, operatorNamespace).Return(externalBuilderSetupJob, nil)
+																														configMapRepository.EXPECT().Read(requestContext, externalBuilderSetupInventoryConfigMapName, operatorNamespace).Return(externalBuilderSetupInventoryConfigMap, nil)
 																													})
 
-																													It("Should return Done", func() {
-																														// when
-																														result, err := reconciler.Reconcile(requestContext, request)
-																														// then
-																														Expect(err).To(BeNil())
-																														Expect(result).To(Equal(resultDone))
-																													})
+																													Context("The job for the external builder setup exists", func() {
+																														var (
+																															externalBuilderSetupJobName = fmt.Sprintf(workerSetupJobNameFormat, externalBuilderName)
+																															externalBuilderSetupJob     = &batchv1.Job{
+																																ObjectMeta: metav1.ObjectMeta{
+																																	Name:      externalBuilderSetupJobName,
+																																	Namespace: operatorNamespace,
+																																},
+																															}
+																														)
 
+																														BeforeEach(func() {
+																															jobRepository.EXPECT().Read(requestContext, externalBuilderSetupJobName, operatorNamespace).Return(externalBuilderSetupJob, nil)
+																														})
+
+																														It("Should return requeue if failed to get internal builder setup job", func() {
+																															// given
+																															jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(nil, errFailed)
+																															// when
+																															result, err := reconciler.Reconcile(requestContext, request)
+																															// then
+																															Expect(err).To(BeNil())
+																															Expect(result).To(Equal(resultRequeue))
+																														})
+
+																														It("Should return done if the internal builder setup job is still running", func() {
+																															// given
+																															internalBuilderSetupJob.Status.Active = 1
+																															jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(internalBuilderSetupJob, nil)
+																															// when
+																															result, err := reconciler.Reconcile(requestContext, request)
+																															// then
+																															Expect(err).To(BeNil())
+																															Expect(result).To(Equal(resultDone))
+																														})
+
+																														Context("The internal builder setup job is done", func() {
+																															BeforeEach(func() {
+																																internalBuilderSetupJob.Status.Active = 0
+																																internalBuilderSetupJob.Status.Conditions = append(
+																																	internalBuilderSetupJob.Status.Conditions,
+																																	batchv1.JobCondition{
+																																		Type:   batchv1.JobComplete,
+																																		Status: corev1.ConditionTrue,
+																																	},
+																																)
+																																jobRepository.EXPECT().Read(requestContext, internalBuilderSetupJobName, operatorNamespace).Return(internalBuilderSetupJob, nil)
+																															})
+
+																															Context("The external builder setup job is done", func() {
+																																var (
+																																	conditionsReady = []osbuildv1alpha1.Condition{
+																																		{
+																																			Type:   osbuildv1alpha1.ConditionInProgress,
+																																			Status: metav1.ConditionFalse,
+																																		},
+																																		{
+																																			Type:   osbuildv1alpha1.ConditionFailed,
+																																			Status: metav1.ConditionFalse,
+																																		},
+																																		{
+																																			Type:   osbuildv1alpha1.ConditionReady,
+																																			Status: metav1.ConditionTrue,
+																																		},
+																																	}
+																																)
+
+																																BeforeEach(func() {
+																																	externalBuilderSetupJob.Status.Active = 0
+																																	externalBuilderSetupJob.Status.Conditions = append(
+																																		internalBuilderSetupJob.Status.Conditions,
+																																		batchv1.JobCondition{
+																																			Type:   batchv1.JobComplete,
+																																			Status: corev1.ConditionTrue,
+																																		},
+																																	)
+																																	jobRepository.EXPECT().Read(requestContext, externalBuilderSetupJobName, operatorNamespace).Return(externalBuilderSetupJob, nil)
+																																})
+
+																																Context("Need to updated conditions", func() {
+																																	var (
+																																		originalInstance *osbuildv1alpha1.OSBuildEnvConfig
+																																	)
+
+																																	BeforeEach(func() {
+																																		originalInstance = instance.DeepCopy()
+																																	})
+
+																																	AfterEach(func() {
+																																		instance.Status.Conditions = append([]osbuildv1alpha1.Condition{}, conditionsInProgress...)
+																																	})
+
+																																	It("Should return requeue if failed to update the conditions", func() {
+																																		// given
+																																		osBuildEnvConfigRepository.EXPECT().PatchStatus(requestContext, originalInstance, &instance).Return(errFailed)
+																																		// when
+																																		result, err := reconciler.Reconcile(requestContext, request)
+																																		// then
+																																		Expect(err).To(BeNil())
+																																		Expect(result).To(Equal(resultRequeue))
+																																	})
+
+																																	It("Should return requeue if the conditions were updated", func() {
+																																		validateOSBuildEnvConfigConditionArr(instance.Status.Conditions, osbuildv1alpha1.ConditionInProgress)
+																																		// given
+																																		osBuildEnvConfigRepository.EXPECT().PatchStatus(requestContext, originalInstance, &instance).Return(nil)
+																																		// when
+																																		result, err := reconciler.Reconcile(requestContext, request)
+																																		// then
+																																		Expect(err).To(BeNil())
+																																		Expect(result).To(Equal(resultQuickRequeue))
+																																		validateOSBuildEnvConfigConditionArr(instance.Status.Conditions, osbuildv1alpha1.ConditionReady)
+																																	})
+																																})
+
+																																Context("The Condition are already updated", func() {
+																																	BeforeEach(func() {
+																																		instance.Status.Conditions = append([]osbuildv1alpha1.Condition{}, conditionsReady...)
+																																	})
+
+																																	It("Should return Done", func() {
+																																		// when
+																																		result, err := reconciler.Reconcile(requestContext, request)
+																																		// then
+																																		Expect(err).To(BeNil())
+																																		Expect(result).To(Equal(resultDone))
+																																	})
+																																})
+																															})
+																														})
+																													})
 																												})
-
 																											})
-
 																										})
-
 																									})
 																								})
 																							})
@@ -1706,3 +1864,13 @@ var _ = Describe("OSBuildEnvConfig Controller", func() {
 		})
 	})
 })
+
+func validateOSBuildEnvConfigConditionArr(conditions []osbuildv1alpha1.Condition, requiredStatus osbuildv1alpha1.ConditionType) {
+	for _, c := range conditions {
+		if c.Type == requiredStatus {
+			Expect(c.Status).To(Equal(metav1.ConditionTrue))
+		} else {
+			Expect(c.Status).To(Equal(metav1.ConditionFalse))
+		}
+	}
+}

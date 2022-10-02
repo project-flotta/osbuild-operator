@@ -14,6 +14,7 @@ import (
 type Repository interface {
 	Read(ctx context.Context, name string) (*v1alpha1.OSBuildEnvConfig, error)
 	Patch(ctx context.Context, old, new *v1alpha1.OSBuildEnvConfig) error
+	PatchStatus(ctx context.Context, old, new *v1alpha1.OSBuildEnvConfig) error
 }
 
 type CRRepository struct {
@@ -33,4 +34,9 @@ func (r *CRRepository) Read(ctx context.Context, name string) (*v1alpha1.OSBuild
 func (r *CRRepository) Patch(ctx context.Context, old, new *v1alpha1.OSBuildEnvConfig) error {
 	patch := client.MergeFrom(old)
 	return r.client.Patch(ctx, new, patch)
+}
+
+func (r *CRRepository) PatchStatus(ctx context.Context, old, new *v1alpha1.OSBuildEnvConfig) error {
+	patch := client.MergeFrom(old)
+	return r.client.Status().Patch(ctx, new, patch)
 }

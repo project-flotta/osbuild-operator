@@ -49,6 +49,20 @@ func (mr *MockRepositoryMockRecorder) Patch(arg0, arg1, arg2 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockRepository)(nil).Patch), arg0, arg1, arg2)
 }
 
+// PatchStatus mocks base method.
+func (m *MockRepository) PatchStatus(arg0 context.Context, arg1, arg2 *v1alpha1.OSBuildEnvConfig) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PatchStatus", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PatchStatus indicates an expected call of PatchStatus.
+func (mr *MockRepositoryMockRecorder) PatchStatus(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchStatus", reflect.TypeOf((*MockRepository)(nil).PatchStatus), arg0, arg1, arg2)
+}
+
 // Read mocks base method.
 func (m *MockRepository) Read(arg0 context.Context, arg1 string) (*v1alpha1.OSBuildEnvConfig, error) {
 	m.ctrl.T.Helper()
