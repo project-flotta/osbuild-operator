@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/cert-manager/cert-manager v1.9.1
-	github.com/kdomanski/iso9660 v0.3.2
+	github.com/kdomanski/iso9660 v0.3.3
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/onsi/ginkgo/v2 v2.2.0
 	github.com/onsi/gomega v1.20.2
