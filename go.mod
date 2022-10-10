@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.2.0
 	github.com/onsi/gomega v1.20.2
 	github.com/u-root/u-root v0.9.0
-	github.com/urfave/cli/v2 v2.17.1
+	github.com/urfave/cli/v2 v2.19.2
 	k8s.io/apimachinery v0.25.2
 	k8s.io/client-go v0.25.2
 	sigs.k8s.io/controller-runtime v0.13.0
