@@ -6,8 +6,8 @@ require (
 	github.com/cert-manager/cert-manager v1.9.1
 	github.com/kdomanski/iso9660 v0.3.3
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/onsi/ginkgo/v2 v2.2.0
-	github.com/onsi/gomega v1.20.2
+	github.com/onsi/ginkgo/v2 v2.3.0
+	github.com/onsi/gomega v1.22.1
 	github.com/u-root/u-root v0.9.0
 	github.com/urfave/cli/v2 v2.17.1
 	k8s.io/apimachinery v0.25.2
