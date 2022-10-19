@@ -8,7 +8,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/onsi/ginkgo/v2 v2.3.0
 	github.com/onsi/gomega v1.22.1
-	github.com/u-root/u-root v0.9.0
+	github.com/u-root/u-root v0.10.0
 	github.com/urfave/cli/v2 v2.17.1
 	k8s.io/apimachinery v0.25.2
 	k8s.io/client-go v0.25.2
