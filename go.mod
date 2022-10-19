@@ -32,7 +32,7 @@ require (
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
-	kubevirt.io/api v0.57.1
+	kubevirt.io/api v0.58.0
 	kubevirt.io/containerized-data-importer-api v1.50.0
 )
 
