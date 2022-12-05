@@ -203,7 +203,7 @@ func (c *Command) Run(cCtx *Context, arguments ...string) (err error) {
 
 	cerr := cCtx.checkRequiredFlags(c.Flags)
 	if cerr != nil {
-		_ = ShowSubcommandHelp(cCtx)
+		_ = helpCommand.Action(cCtx)
 		return cerr
 	}
 
@@ -252,7 +252,7 @@ func (c *Command) Run(cCtx *Context, arguments ...string) (err error) {
 				}
 			}
 		}
-	} else if cCtx.App.DefaultCommand != "" {
+	} else if c.isRoot && cCtx.App.DefaultCommand != "" {
 		if dc := cCtx.App.Command(cCtx.App.DefaultCommand); dc != c {
 			cmd = dc
 		}
